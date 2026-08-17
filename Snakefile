@@ -9,7 +9,8 @@ NUMBER_OF_SETS = config["models"]["number_model_hyperparameters_sets"]
 MODELS = config["models"]["model_list"]
 MODES = config["analysis"]["modes"]
 MODES_v2 = config["analysis"]["modes_v2"]
-RUNS = range(200)
+RUNS = range(config["swd_bootstrapping"]["runs"])
+NDIR = config["swd_bootstrapping"]["n_directions"]
 
 INIT_SAMPLES_DIR = f"saved_samples/{TAG}/"
 INIT_SWD_DIR = f"saved_swd_distribution/{TAG}/"
@@ -83,6 +84,7 @@ rule run_initial_bootstrap_3D:
             --distribution {input.samples_dir} \
             --output_dir {INIT_SWD_DIR}3D/indiv_bootstrap/ \
             --output_file {output.output_file} \
+            --n_directions {NDIR} \
             --random_seed {wildcards.run_id}
         """
 
@@ -115,6 +117,7 @@ rule run_initial_bootstrap_8D:
             --distribution {input.samples_dir} \
             --output_dir {INIT_SWD_DIR}8D/indiv_bootstrap/ \
             --output_file {output.output_file} \
+            --n_directions {NDIR} \
             --random_seed {wildcards.run_id}
         """
 
@@ -146,6 +149,7 @@ rule run_initial_bootstrap_21D:
             --distribution {input.samples_dir} \
             --output_dir {INIT_SWD_DIR}21D/indiv_bootstrap/ \
             --output_file {output.output_file} \
+            --n_directions {NDIR} \
             --random_seed {wildcards.run_id}
         """
 
@@ -208,6 +212,7 @@ rule run_custom_bootstrap:
             --distribution {input.samples_dir} \
             --output_dir {SWD_DIR}indiv_bootstrap/ \
             --output_file {output.output_file} \
+            --n_directions {NDIR} \
             --random_seed {wildcards.run_id}
         """
 
@@ -265,6 +270,7 @@ rule single_fine_tuning:
             --logdir {params.logdir} \
             --custom_swd_distribution {input.custom_swd_distribution} \
             --params_interest {params.interest_params} \
+            --n_directions {NDIR} \
             --binning_file {params.binning_file} \
             --output_file {output.output_file}
         """
@@ -359,6 +365,7 @@ rule compute_metrics_plots:
             --swd_distribution_3D {input.swd_dist_file_3D} \
             --swd_distribution_8D {input.swd_dist_file_8D} \
             --swd_distribution_21D {input.swd_dist_file_21D} \
+            --n_directions {NDIR} \
             --binning_file {params.binning_file}
         """
 

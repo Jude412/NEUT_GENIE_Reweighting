@@ -31,6 +31,7 @@ if __name__ == "__main__":
     args.add_argument("--swd_distribution_8D", type = str, help = "The distribution to compute the 8D SWD p-value for.")
     args.add_argument("--swd_distribution_21D", type = str, help = "The distribution to compute the 21D SWD p-value for.")
     args.add_argument("--params_interest", nargs='+', help="List of parameter names used in the training.")
+    args.add_argument('--n_directions', type=int, default=500, help="Number of directions to draw for each bootstrap")
     args.add_argument("--binning_file", type=str, help="Path to the json file containing the binning information for each parameter.")
     args.add_argument("--output_file", type = str, help = "The path to the csv file where the hyperparameters and metrics will be saved in addition to the tensorboard log file.")
     args = args.parse_args()
@@ -105,19 +106,19 @@ if __name__ == "__main__":
 
     weight_dict = {args.model: weights_test}
 
-    dict_mean_swd_3D = compute_swd(original_test_3D, target_test_3D, weight_dict, n_directions = 500)
+    dict_mean_swd_3D = compute_swd(original_test_3D, target_test_3D, weight_dict, n_directions = args.n_directions)
     list_swd_3D = np.load(args.swd_distribution_3D)
     p_value_3D = compute_p_value(dict_mean_swd_3D, list_swd_3D)[args.model]
 
-    dict_mean_swd_8D = compute_swd(original_test_8D, target_test_8D, weight_dict, n_directions = 500)
+    dict_mean_swd_8D = compute_swd(original_test_8D, target_test_8D, weight_dict, n_directions = args.n_directions)
     list_swd_8D = np.load(args.swd_distribution_8D)
     p_value_8D = compute_p_value(dict_mean_swd_8D, list_swd_8D)[args.model]
 
-    dict_mean_swd_21D = compute_swd(original_test_21D, target_test_21D, weight_dict, n_directions = 500)
+    dict_mean_swd_21D = compute_swd(original_test_21D, target_test_21D, weight_dict, n_directions = args.n_directions)
     list_swd_21D = np.load(args.swd_distribution_21D)
     p_value_21D = compute_p_value(dict_mean_swd_21D, list_swd_21D)[args.model]
 
-    dict_mean_swd_ndim = compute_swd(original_test, target_test, weight_dict, n_directions = 500)
+    dict_mean_swd_ndim = compute_swd(original_test, target_test, weight_dict, n_directions = args.n_directions)
     list_swd_ndim = np.load(args.custom_swd_distribution)
     p_value_ndim = compute_p_value(dict_mean_swd_ndim, list_swd_ndim)[args.model]
 

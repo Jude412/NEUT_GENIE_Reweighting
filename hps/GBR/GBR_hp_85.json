@@ -1,1 +1,0 @@
-{"n_estimators": 80, "learning_rate": 0.1, "max_depth": 7, "min_samples_leaf": 50, "loss_regularization": 4}

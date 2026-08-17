@@ -19,3 +19,4 @@ testing.ipynb
 .snakemake/
 batch/
 __pycache__/
+hps/

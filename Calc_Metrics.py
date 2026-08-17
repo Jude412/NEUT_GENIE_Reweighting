@@ -38,6 +38,7 @@ if __name__ == "__main__":
                             default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_8D_test20p.npy")
     argparser.add_argument("--swd_distribution_21D", type=str, required=False, help="Path to the SWD distribution file or to store it.",
                             default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_21D_test20p.npy")
+    argparser.add_argument('--n_directions', type=int, default=500, help="Number of directions to draw for each bootstrap")
     argparser.add_argument("--binning_file", type=str, required=False, help="Path to the json file containing the binning information for each parameter.",
                            default="/vols/dune/jmm224/t2knova/reweighting/binnings.json")
     args = argparser.parse_args()
@@ -113,15 +114,15 @@ if __name__ == "__main__":
     if args.compute_swd:
         if args.custom_swd_distribution is not None:
             swd_custom_list = np.load(args.custom_swd_distribution)
-            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters], weights_dict)
+            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters], weights_dict, n_directions=argparser.n_directions)
             p_value_dict_custom = compute_p_value(swd_dict_custom, swd_custom_list)
 
         swd_list_3D = np.load(args.swd_distribution_3D)
         swd_list_8D = np.load(args.swd_distribution_8D)
         swd_list_21D = np.load(args.swd_distribution_21D)
-        swd_dict_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict)
-        swd_dict_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict)
-        swd_dict_21D = compute_swd(original_test, target_test, weights_dict)
+        swd_dict_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict, n_directions=argparser.n_directions)
+        swd_dict_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict, n_directions=argparser.n_directions)
+        swd_dict_21D = compute_swd(original_test, target_test, weights_dict, n_directions=argparse.n_directions)
 
         p_value_dict_3D = compute_p_value(swd_dict_3D, swd_list_3D)
         p_value_dict_8D = compute_p_value(swd_dict_8D, swd_list_8D)
