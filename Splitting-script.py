@@ -15,9 +15,9 @@ import os
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Script to create the training and validation samples for the reweighting techniques.")
     argparser.add_argument("--input_file_NEUT", required=False, type=str, help="Path to the input ROOT file from Nuisance (that used NEUT as generator).",
-                           default="/home/hep/tlt26/RW_Snakemake/NEUT_file/T2KND_FHC_numu_H2O_NEUT562_1M_0000_NUISFLAT.root")
+                           default="/vols/dune/jmm224/t2knova/reweighting/NEUT_files/T2KND_FHC_numu_H2O_NEUT562_1M_0000_NUISFLAT.root")
     argparser.add_argument("--input_file_GENIE", required=False, type=str, help="Path to the input ROOT file from Nuisance (that used GENIE as generator).",
-                           default="/home/hep/tlt26/RW_Snakemake/GENIE_file/T2KND_FHC_numu_H2O_GENIEv3_G18_10b_00_000_1M_0000_NUISFLAT.root")
+                           default="/vols/dune/jmm224/t2knova/reweighting/GENIE_files/T2KND_FHC_numu_H2O_GENIEv3_G18_10b_00_000_1M_0000_NUISFLAT.root")
     argparser.add_argument("--modes", type=int, nargs="+", required=False, help="Interaction modes to select (e.g. 1 for CCQE).", default=[1] )
     argparser.add_argument("--modes_v2", type=int, nargs="+", required=False, help="Interaction modes v2 to select (e.g. 1 for CCQE).", default=[1] )
     # argparser.add_argument("--neutrino_PDG", type=int, required=False, help="PDG code of the neutrino type to select (e.g. 14 for numu).", default = 14)
@@ -26,7 +26,7 @@ if __name__ == "__main__":
     argparser.add_argument("--random_seeds", type = list, required=False, 
                         help="List of 2 random seeds to use for the training and validation split.", default= [42, 43])
     argparser.add_argument("--samples_dir", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
-                            default="/home/hep/tlt26/RW_Snakemake/saved_samples/first_test/")
+                            default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/")
     argparser.add_argument("--parameters_interest", nargs='+', required=False, help="List of parameters to keep from the original files, in the format 'param1,param2,...'.",
                            default=["Enu_true", "ELep", "CosLep", "W", "Eav"])
     args = argparser.parse_args()

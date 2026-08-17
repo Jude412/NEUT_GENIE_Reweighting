@@ -19,7 +19,7 @@ from scipy.stats import chi2 as chi2_dist
 def plot_histograms(original, target, weights_dict, dict_binning, original_weights = None, target_weights = None, 
                     xlabels = ["E_nu(GeV)", "E_lepton(GeV)", "cos_theta_lepton"],
                     variables = ["E_nu", "E_lepton", "cos_theta_lepton"],
-                    add_wass_distance = True, add_chi2 = True, output_file = "/home/hep/tlt26/T2K_Rw/Ndim/saved_figures/live.pdf"):
+                    add_wass_distance = True, add_chi2 = True, output_file = "/vols/dune/jmm224/t2knova/reweighting/saved_figures/live.pdf"):
     """This function plots the original, reweighted and target distributions for each variable, with a ratio plot of the reweighted
       distribution over the target distribution. The weights_dict is a dictionary containing the predicted weights for each method, 
       with the method name as key and the weights as value."""
@@ -185,7 +185,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
     return None
 
 def plot_2D_histogram(original, target, weights_dict, target_weights = None, xlabels = ["E_nu(GeV)", "E_lepton(GeV)", "Cos Theta_l"], 
-                      nbins = 30, pull = False, output_file = "/home/hep/tlt26/T2K_Rw/Ndim/saved_figures/histograms_and_ratios_2D.pdf"):
+                      nbins = 30, pull = False, output_file = "/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios_2D.pdf"):
     mh.style.use("DUNE")
     combinations = np.array(np.meshgrid(range(len(xlabels)), range(len(xlabels)))).T.reshape(-1, 2)
     with PdfPages(f"{output_file}") as pdf:

@@ -17,27 +17,27 @@ from Train_predict import predict_XGB
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description='Evaluate the performance of a trained model on a different dataset.')
     argparser.add_argument('--model_path', type=str, required=False, help='Path to the trained model (pickle file).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_models/6D_mode1_11/6D/XGB_model_6D.pkl')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_models/6D_mode1_11/6D/XGB_model_6D.pkl')
     argparser.add_argument('--original_test_nD', type=str, required=False, help='Path to the original 6D dataset (containing the desired mode) (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_samples/6D_mode1_11/6D/original_test.csv')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_mode1_11/6D/original_test.csv')
     argparser.add_argument('--original_test', type=str, required=False, help='Path to the original dataset with ALL PARAMETERS (containing the desired mode) (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_samples/6D_mode1_11/21D/original_test.csv')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_mode1_11/21D/original_test.csv')
     argparser.add_argument('--target_test_nD', type=str, required=False, help='Path to the target 6D dataset (containing the desired mode) (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_samples/6D_5andmode_mode_11/6D/target_test.csv')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_5andmode_mode_11/6D/target_test.csv')
     argparser.add_argument('--target_test', type=str, required=False, help='Path to the target dataset with ALL PARAMETERS (containing the desired mode) (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_samples/6D_5andmode_mode_11/21D/target_test.csv')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_5andmode_mode_11/21D/target_test.csv')
     argparser.add_argument('--swd_distribution_target_3D', type=str, required=False, help='Path to the SWD distribution of the target dataset for the 3D case (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_swd_distribution/6D_5andmode_mode_11/3D/swd_distribution_3D.npy')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/3D/swd_distribution_3D.npy')
     argparser.add_argument('--swd_distribution_target_8D', type=str, required=False, help='Path to the SWD distribution of the target dataset for the 8D case (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_swd_distribution/6D_5andmode_mode_11/8D/swd_distribution_8D.npy')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/8D/swd_distribution_8D.npy')
     argparser.add_argument('--swd_distribution_target_21D', type=str, required=False, help='Path to the SWD distribution of the target dataset for the 21D case (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_swd_distribution/6D_5andmode_mode_11/21D/swd_distribution_21D.npy')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/21D/swd_distribution_21D.npy')
     argparser.add_argument('--swd_distribution_target_nD', type=str, required=False, help='Path to the SWD distribution of the target dataset (csv).',
-                            default='/home/hep/tlt26/RW_Snakemake/saved_swd_distribution/6D_5andmode_mode_11/6D/swd_distribution_6D.npy')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/6D/swd_distribution_6D.npy')
     argparser.add_argument('--binning_file', type=str, required=False, help="Path to the json file containing the binning information for each parameter.",
-                           default="/home/hep/tlt26/RW_Snakemake/binnings.json")
+                           default="/vols/dune/jmm224/t2knova/reweighting/binnings.json")
     argparser.add_argument('--output_path', type=str, required=False, help='Path to save the output plots and metrics.',
-                            default='/home/hep/tlt26/RW_Snakemake/Saved_evaluation/trained_1_11_eval_11/')
+                            default='/vols/dune/jmm224/t2knova/reweighting/Saved_evaluation/trained_1_11_eval_11/')
     argparser.add_argument('--param_trained', type=str, nargs='+', required=False, help='Name of the parameter on which the model was trained')
     args = argparser.parse_args()
 

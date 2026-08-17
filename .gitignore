@@ -18,4 +18,4 @@ live_metrics.py
 testing.ipynb
 .snakemake/
 batch/
-__pycache__
+__pycache__/

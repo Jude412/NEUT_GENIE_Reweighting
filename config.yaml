@@ -5,7 +5,7 @@ paths:
 analysis:
   modes: 
     - 1
-    - 2
+    # - 2
     # - 11
     # - 12
     # - 13
@@ -61,9 +61,7 @@ features:
     - W
     - PTlep
 
-    
-  
-  binning_file: "/home/jmm224/reweighting/binnings.json"
+  binning_file: "/vols/dune/jmm224/t2knova/reweighting/binnings.json"
 
 
 models:
@@ -75,10 +73,10 @@ models:
   # choose from binning, NN, GBR (HEP_ML) and XGB (XGBoost)
   
   number_model_hyperparameters_sets:
-    binning: 24
-    NN: 240
-    GBR: 270
-    XGB : 280
+    # binning: 24
+    # NN: 240
+    # GBR: 270
+    XGB : 96
     
 
 dimensions:

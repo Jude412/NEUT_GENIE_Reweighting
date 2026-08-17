@@ -18,7 +18,7 @@ for n_estimator in n_estimators_list:
             for loss_regularization in loss_regularization_list:
                 with open(f"hps/GBR/GBR_hp_{counter}.json", "w") as f:
                     json.dump({"n_estimators": n_estimator, "learning_rate": learning_rate, "max_depth": max_depth, "min_samples_leaf": min_samples_leaf, "loss_regularization": loss_regularization}, f)
-                sub_file_template += f"/home/hep/tlt26/T2K_Rw/hps/GBR/GBR_hp_{counter}.json\n"
+                sub_file_template += f"/vols/dune/jmm224/t2knova/reweighting/hps/GBR/GBR_hp_{counter}.json\n"
                 counter += 1
 
 sub_file_template += ")"

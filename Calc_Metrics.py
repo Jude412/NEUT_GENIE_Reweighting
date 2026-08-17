@@ -17,14 +17,14 @@ import pickle
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description='Evaluate the performance of reweighting methods.')
     argparser.add_argument('--original_test', type=str, required=False, help='Path to the original 21D test dataset (csv).',
-                            default='/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/original_test_21D.csv')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/original_test_21D.csv')
     argparser.add_argument('--target_test', type=str, required=False, help='Path to the target 21D test dataset (csv).',
-                            default='/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/target_test_21D.csv')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/target_test_21D.csv')
     argparser.add_argument('--weights_paths', type=str, required=False,
                            help = "path to the json file containing a dictionnary with each method and path to its predicted weights (csv).",
-                           default='/home/hep/tlt26/T2K_Rw/Ndim/make_metrics.json')
+                           default='/vols/dune/jmm224/t2knova/reweighting/make_metrics.json')
     argparser.add_argument('--output_file', type=str, required=False, help='File to save the output plots and metrics.',
-                            default='/home/hep/tlt26/T2K_Rw/Ndim/saved_figures/histograms_and_ratios')
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios')
     argparser.add_argument('--make_1D_plots', action=argparse.BooleanOptionalAction, help='Whether to make the 1D plots or not.')
     argparser.add_argument('--make_2D_plots', action=argparse.BooleanOptionalAction, help='Whether to make the 2D plots or not.')
     argparser.add_argument('--compute_chi2', action=argparse.BooleanOptionalAction, help='Whether to compute the Chi2 statistic or not.')
@@ -33,13 +33,13 @@ if __name__ == "__main__":
                             default = "Enu_True ELep CosThetaLep")
     argparser.add_argument('--custom_swd_distribution', type=str, required=False, help='Path to a custom SWD distribution to compute the p-value with.')
     argparser.add_argument("--swd_distribution_3D", type=str, required=False, help="Path to the SWD distribution file or to store it.", 
-                        default = "/home/hep/tlt26/T2K_Rw/Ndim/swd_distribution/list_swd_3D_test20p.npy")
+                        default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_3D_test20p.npy")
     argparser.add_argument("--swd_distribution_8D", type=str, required=False, help="Path to the SWD distribution file or to store it.",
-                            default = "/home/hep/tlt26/T2K_Rw/Ndim/swd_distribution/list_swd_8D_test20p.npy")
+                            default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_8D_test20p.npy")
     argparser.add_argument("--swd_distribution_21D", type=str, required=False, help="Path to the SWD distribution file or to store it.",
-                            default = "/home/hep/tlt26/T2K_Rw/Ndim/swd_distribution/list_swd_21D_test20p.npy")
+                            default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_21D_test20p.npy")
     argparser.add_argument("--binning_file", type=str, required=False, help="Path to the json file containing the binning information for each parameter.",
-                           default="/home/hep/tlt26/RW_Snakemake/binnings.json")
+                           default="/vols/dune/jmm224/t2knova/reweighting/binnings.json")
     args = argparser.parse_args()
 
     List_all_parameters = ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav", "W", "y", "Mode", "Mode_v2",

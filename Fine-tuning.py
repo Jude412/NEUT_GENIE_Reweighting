@@ -16,16 +16,16 @@ import time
 if __name__ == "__main__":
     args = argparse.ArgumentParser(description="Train an XGBoost model to reweight the 'original' distribution into the 'target' distribution.")
     args.add_argument('--train_sample_dir', type=str, required=False, help='Directory where the training original and target samples are stored in csv format.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/7D/")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/7D/")
     args.add_argument('--sample_dir_3D', type=str, required=False, help='Directory where the 3D original and target samples are stored in csv format.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/3D/")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/3D/")
     args.add_argument('--sample_dir_8D', type=str, required=False, help='Directory where the 8D original and target samples are stored in csv format.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/8D/")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/8D/")
     args.add_argument('--sample_dir_21D', type=str, required=False, help='Directory where the 21D original and target samples are stored in csv format.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/21D/")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/21D/")
     args.add_argument('--model', type=str, required=True, choices=['binning', 'NN', 'GBR', 'XGB'], help='The reweighting model to train.')
     args.add_argument('--hyperparameters', type=str, required=True, help="Path to JSON file containing hyperparameters to train the XGBoost model.")
-    args.add_argument('--logdir', type=str, required=False, default="/home/hep/tlt26/T2K_Rw/Ndim/TensorBoard/test_run2", help="The directory where the tensorboard log file will be saved.")
+    args.add_argument('--logdir', type=str, required=False, default="/vols/dune/jmm224/t2knova/reweighting/TensorBoard/test_run2", help="The directory where the tensorboard log file will be saved.")
     args.add_argument("--custom_swd_distribution", type = str, help = "The distribution to compute the Training-dim SWD p-value for.")
     args.add_argument("--swd_distribution_3D", type = str, help = "The distribution to compute the 3D SWD p-value for.")
     args.add_argument("--swd_distribution_8D", type = str, help = "The distribution to compute the 8D SWD p-value for.")

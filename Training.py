@@ -13,23 +13,23 @@ import os
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Train a reweighting model and save the weights and the model itself.')
     parser.add_argument('--original_train', type=str, required=False, help='Path to the original training sample csv file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/4D_Eav/original_train.csv")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/4D_Eav/original_train.csv")
     parser.add_argument('--original_val', type=str, required=False, help='Path to the original validation sample csv file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/4D_Eav/original_val.csv")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/4D_Eav/original_val.csv")
     parser.add_argument('--original_test', type=str, required=False, help='Path to the original test sample csv file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/4D_Eav/original_test.csv")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/4D_Eav/original_test.csv")
     parser.add_argument('--target_train', type=str, required=False, help='Path to the target training sample csv file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/4D_Eav/target_train.csv")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/4D_Eav/target_train.csv")
     parser.add_argument('--target_val', type=str, required=False, help='Path to the target validation sample csv file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/4D_Eav/target_val.csv")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/4D_Eav/target_val.csv")
     parser.add_argument('--target_test', type=str, required=False, help='Path to the target test sample csv file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_samples/4D_Eav/target_test.csv")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/4D_Eav/target_test.csv")
     parser.add_argument('--model_list', required=True, nargs='+', help='List of the reweighting models to train.')
     parser.add_argument('--hparams_dict', type=str, default=None, help='Path to the file containing the dictionary of hyperparameters for the models in json format. If not provided, default hyperparameters will be used.')
     parser.add_argument('--save_weights_path', type=str, required=False, help='Path to save the predicted weights csv file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_weights/4D_Eav/")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_weights/4D_Eav/")
     parser.add_argument('--save_model_path', type=str, required=False, help='Path to save the trained model file.',
-                        default="/home/hep/tlt26/T2K_Rw/Ndim/saved_models/4D_Eav/")
+                        default="/vols/dune/jmm224/t2knova/reweighting/saved_models/4D_Eav/")
     parser.add_argument('--save_weight_path_dict', type=str, help = "path to the json file where the dictionary " \
     "   containing the paths to the predicted weights for each model will be saved.")
     args = parser.parse_args()

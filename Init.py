@@ -13,9 +13,9 @@ import os
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Script to create the 3D and 8D training and validation samples and bootstrappedSWD distribution for the reweighting techniques.")
     argparser.add_argument("--input_file_NEUT", required=False, type=str, help="Path to the input ROOT file from Nuisance (that used NEUT as generator).",
-                           default="/home/hep/tlt26/RW_Snakemake/NEUT_file/T2KND_FHC_numu_H2O_NEUT562_1M_0000_NUISFLAT.root")
+                           default="/vols/dune/jmm224/t2knova/reweighting/NEUT_files/T2KND_FHC_numu_H2O_NEUT562_1M_0000_NUISFLAT.root")
     argparser.add_argument("--input_file_GENIE", required=False, type=str, help="Path to the input ROOT file from Nuisance (that used GENIE as generator).",
-                           default="/home/hep/tlt26/RW_Snakemake/GENIE_file/T2KND_FHC_numu_H2O_GENIEv3_G18_10b_00_000_1M_0000_NUISFLAT.root")
+                           default="/vols/dune/jmm224/t2knova/reweighting/GENIE_files/T2KND_FHC_numu_H2O_GENIEv3_G18_10b_00_000_1M_0000_NUISFLAT.root")
     argparser.add_argument("--modes", type=int, nargs="+", help="Interaction modes to select (e.g. 1 for CCQE).",
                            required=False, default=[1])
     argparser.add_argument("--modes_v2", type=int, nargs="+", help="Interaction modes v2 to select (e.g. 1 for CC0pi).",
@@ -29,11 +29,11 @@ if __name__ == "__main__":
     argparser.add_argument("--random_seeds", type = list, required=False, 
                         help="List of 2 random seeds to use for the training and validation split.",default= [42, 43])
     argparser.add_argument("--output_dir_samples_3D", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
-                            default="/home/hep/tlt26/RW_Snakemake/saved_samples/first_test/3D/")
+                            default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/3D/")
     argparser.add_argument("--output_dir_samples_8D", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
-                            default="/home/hep/tlt26/RW_Snakemake/saved_samples/first_test/8D/")
+                            default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/8D/")
     argparser.add_argument("--output_dir_samples_21D", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
-                            default="/home/hep/tlt26/RW_Snakemake/saved_samples/first_test/21D/")
+                            default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/21D/")
     args = argparser.parse_args()
 
     # Getting data from the files
