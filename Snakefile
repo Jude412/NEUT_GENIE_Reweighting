@@ -50,7 +50,7 @@ def genie_file_for(wildcards):
     return files[0]
 
 # ---------------------------------------------------------------------------
-# Per-sample path helpers  (all output paths are namespaced by {sample})
+# Per-sample path helpers
 # ---------------------------------------------------------------------------
 
 INIT_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/"
@@ -63,7 +63,8 @@ FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/{DIM}D/"
 HPS_DIR          = f"hps/{TAG}/"
 TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{DIM}D/"
 
-# Hyperparameter grid files are sample-independent (shared search space).HPS_FILES = []
+# Hyperparameter grid files are sample-independent (shared search space).
+HPS_FILES = []
 for model in MODELS:
     for run_id in range(NUMBER_OF_SETS[model]):
         HPS_FILES.append(os.path.join(HPS_DIR, f"{model}/{model}_hp_{run_id}.json"))

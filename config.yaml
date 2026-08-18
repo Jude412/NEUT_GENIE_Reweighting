@@ -1,6 +1,6 @@
 paths:
-  neut_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_files"
-  genie_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_files"
+  neut_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_file_tree"
+  genie_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_file_tree"
 
 analysis:
   modes: 
@@ -84,8 +84,10 @@ dimensions:
   # In case of 3 or 8 dimensions, add an extra string (ex: "_custom") to dim, to rule out the degeneracy with the regular 3D and 8D cases (always computed for metrics).
 
 swd_bootstrapping:
-  runs: 200
-  n_directions: 500
+  runs: 100
+  n_directions: 100
+  # runs: 200
+  # n_directions: 500
 
 output:
-  tag: "testing_prep_hps"
+  tag: "testing_file_loop"
