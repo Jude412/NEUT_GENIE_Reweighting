@@ -33,7 +33,7 @@ for n_estimator in n_estimators_list:
                                     with open(os.path.join(args.output_dir, f"XGB/XGB_hp_{counter}.json"), "w") as f:
                                         json.dump({"n_estimators": n_estimator, "learning_rate": learning_rate, "max_depth": max_depth, "subsample": subsample, "gamma": gamma, "min_child_weight": min_child_weight, "lambda": lambda_val, "alpha": alpha_val, "early_stopping_rounds": early_stopping_rounds}, f)
 
-                                    sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, "XGB/XGB_hp_{counter}.json") + "\n"
+                                    sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, f"XGB/XGB_hp_{counter}.json") + "\n"
                                     counter += 1
 
 sub_file_template += ")"

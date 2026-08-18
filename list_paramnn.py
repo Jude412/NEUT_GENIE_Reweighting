@@ -26,7 +26,7 @@ for nlayer in layers_list:
                     with open(os.path.join(args.output_dir, f"NN/NN_hp_{counter}.json"), "w") as f:
                         json.dump({"n_layers": nlayer, "n_neurons": nneuron, "epochs": epoch, "batch_size": batch_size, "activation_function": activation_function}, f)
 
-                    sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, "NN/NN_hp_{counter}.json") + "\n"
+                    sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, f"NN/NN_hp_{counter}.json") + "\n"
                     counter += 1
 
 sub_file_template += ")"

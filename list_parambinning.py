@@ -19,8 +19,7 @@ for n_bin in n_bins:
     for n_neigh in n_neighs:
         with open(os.path.join(args.output_dir, f"binning/binning_hp_{counter}.json"), "w") as f:
             json.dump({"n_bins": n_bin, "n_neighs": n_neigh}, f)    
-        sub_file_template += f"/vols/dune/jmm224/t2knova/reweighting/{args.output_dir}/binning/binning_hp_{counter}.json\n"
-        sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, "binning/binning_hp_{counter}.json") + "\n"
+        sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, f"binning/binning_hp_{counter}.json") + "\n"
         counter += 1
 
 sub_file_template += ")"

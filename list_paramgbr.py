@@ -24,7 +24,7 @@ for n_estimator in n_estimators_list:
                 for loss_regularization in loss_regularization_list:
                     with open(os.path.join(args.output_dir, f"GBR/GBR_hp_{counter}.json"), "w") as f:
                         json.dump({"n_estimators": n_estimator, "learning_rate": learning_rate, "max_depth": max_depth, "min_samples_leaf": min_samples_leaf, "loss_regularization": loss_regularization}, f)
-                    sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, "GBR/GBR_hp_{counter}.json") + "\n"
+                    sub_file_template += os.path.join("/vols/dune/jmm224/t2knova/reweighting/", args.output_dir, f"GBR/GBR_hp_{counter}.json") + "\n"
                     counter += 1
 
 sub_file_template += ")"
