@@ -1,6 +1,6 @@
 paths:
-  neut_file: "/vols/dune/jmm224/t2knova/reweighting/NEUT_files/T2KND_FHC_numu_H2O_NEUT562_1M_0000_NUISFLAT.root"
-  genie_file: "/vols/dune/jmm224/t2knova/reweighting/GENIE_files/T2KND_FHC_numu_H2O_GENIEv3_G18_10b_00_000_1M_0000_NUISFLAT.root"
+  neut_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_files"
+  genie_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_files"
 
 analysis:
   modes: 
