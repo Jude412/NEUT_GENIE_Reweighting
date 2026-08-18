@@ -30,7 +30,7 @@ if __name__ == "__main__":
     argparser.add_argument('--compute_chi2', action=argparse.BooleanOptionalAction, help='Whether to compute the Chi2 statistic or not.')
     argparser.add_argument('--compute_swd', action=argparse.BooleanOptionalAction, help='Whether to compute the SWD metric or not.')
     argparser.add_argument('--interest_params', nargs='+', required=False, help='Parameters used for the custom SWD distribution, in the format "param1,param2,...".',
-                            default = "Enu_True ELep CosThetaLep")
+                            default = ["Enu_true", "Plep", "CosLep"])
     argparser.add_argument('--custom_swd_distribution', type=str, required=False, help='Path to a custom SWD distribution to compute the p-value with.')
     argparser.add_argument("--swd_distribution_3D", type=str, required=False, help="Path to the SWD distribution file or to store it.", 
                         default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_3D_test20p.npy")
@@ -114,15 +114,15 @@ if __name__ == "__main__":
     if args.compute_swd:
         if args.custom_swd_distribution is not None:
             swd_custom_list = np.load(args.custom_swd_distribution)
-            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters], weights_dict, n_directions=argparser.n_directions)
+            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters], weights_dict, n_directions=args.n_directions)
             p_value_dict_custom = compute_p_value(swd_dict_custom, swd_custom_list)
 
         swd_list_3D = np.load(args.swd_distribution_3D)
         swd_list_8D = np.load(args.swd_distribution_8D)
         swd_list_21D = np.load(args.swd_distribution_21D)
-        swd_dict_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict, n_directions=argparser.n_directions)
-        swd_dict_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict, n_directions=argparser.n_directions)
-        swd_dict_21D = compute_swd(original_test, target_test, weights_dict, n_directions=argparse.n_directions)
+        swd_dict_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict, n_directions=args.n_directions)
+        swd_dict_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict, n_directions=args.n_directions)
+        swd_dict_21D = compute_swd(original_test, target_test, weights_dict, n_directions=args.n_directions)
 
         p_value_dict_3D = compute_p_value(swd_dict_3D, swd_list_3D)
         p_value_dict_8D = compute_p_value(swd_dict_8D, swd_list_8D)
