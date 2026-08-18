@@ -73,9 +73,9 @@ models:
   # choose from binning, NN, GBR (HEP_ML) and XGB (XGBoost)
   
   number_model_hyperparameters_sets:
-    # binning: 24
-    # NN: 240
-    # GBR: 270
+    binning: 24
+    NN: 240
+    GBR: 270
     XGB : 96
     
 
@@ -88,4 +88,4 @@ swd_bootstrapping:
   n_directions: 500
 
 output:
-  tag: "testing_configurable_bootstrapping"
+  tag: "testing_prep_hps"

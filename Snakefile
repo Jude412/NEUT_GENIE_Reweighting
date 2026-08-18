@@ -1,6 +1,7 @@
 configfile: "config.yaml"
 
 import json
+import os
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
@@ -19,16 +20,20 @@ SWD_DIR = f"saved_swd_distribution/{TAG}/{DIM}D/"
 MODEL_DIR = f"saved_models/{TAG}/{DIM}D/"
 WEIGHTS_DIR = f"saved_weights/{TAG}/{DIM}D/"
 FIG_DIR = f"saved_figures/{TAG}/{DIM}D/"
-HPS_DIR = f"hps/"
+HPS_DIR = f"hps/{TAG}/"
 TENSORBOARD_DIR = f"TensorBoard/{TAG}/{DIM}D/"
 
 FINE_TUNING_OUTPUTS = []
-
 for model in MODELS:
     for run_id in range(NUMBER_OF_SETS[model]):
         FINE_TUNING_OUTPUTS.append(
             TENSORBOARD_DIR + f"{model}/run_{run_id}_metrics.csv"
         )
+
+HPS_FILES = []
+for model in MODELS:
+    for run_id in range(NUMBER_OF_SETS[model]):
+        HPS_FILES.append(os.path.join(HPS_DIR, f"{model}/{model}_hp_{run_id}.json"))
 
 rule initialize_analysis:
     input:
@@ -230,6 +235,18 @@ rule aggregate_custom_bootstrap:
             --output {output.final_file}
         """
 
+rule prepare_hps:
+    output:
+        hps_files = HPS_FILES
+    conda:
+        ENV
+    shell:
+        """
+        python list_parambinning.py --output_dir {HPS_DIR}
+        python list_paramnn.py  --output_dir {HPS_DIR}
+        python list_paramgbr.py  --output_dir {HPS_DIR}
+        python list_paramxgb.py  --output_dir {HPS_DIR}
+        """
 
 rule single_fine_tuning:
     input:
