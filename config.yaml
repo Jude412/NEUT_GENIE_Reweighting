@@ -4,7 +4,7 @@ inputs:
   target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_file_tree"
   target_tree: "T2KNOvATruthTree"
   # All branches read for calculation of analysis parameters
-  branches: ["Enu_true", "ELep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz"]
+  branches: ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep"]
 
 analysis:
   modes: 
@@ -47,7 +47,7 @@ analysis:
     # - 6
     # - 7
 
-  #choose in 0, 1, 2, 3, 4, 5, 6 and 7 (0 for CC0pi, 1 for CC1pipm, 2 for CC1pi0, 3 for CCNpi, 4 for CCOther, 5 for the rest, 6 for CCgamma, 7 for CCOther_QE)
+  #choose in 0, 1, 2, 3, 4, 5, 6 and 7 (0 for CC0pi, 1 for CC1pipm, 2 for CC1pi0, 3 for CCNpi, 4 for CCgamma, 5 for CCOther, 6 for NCInc, 7 for rest (should be nothing here))
 
 
   neutrino_PDG: 14
@@ -57,18 +57,18 @@ analysis:
 parameters:
   reweighting: # parameters to train the reweighting models on
     - Enu_true
-    - Plep
+    - PLep
     - CosLep
     - Eav
     - W
     - PTlep
   
   # parameters to compute the metrics on (along with the reweighting parameters)
-  all: ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav",
+  all: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav",
         "W", "y", "Mode", "Mode_v2", "cc", "N_n", "K_n", 
         "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
-  8D: ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav"]
-  3D: ["Enu_true", "Plep", "CosLep"]
+  8D: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav"]
+  3D: ["Enu_true", "PLep", "CosLep"]
 
   binning_file: "/vols/dune/jmm224/t2knova/reweighting/binnings.json"
 

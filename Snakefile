@@ -34,6 +34,32 @@ def get_samples():
             samples.append(rel)
     return samples
 
+def get_samples():
+    original_files = glob.glob(os.path.join(ORIG_DIR, "**/*.root"), recursive=True)
+    seen = set()
+    samples = []
+    rejected = []
+    for of in original_files:
+        rel = os.path.relpath(os.path.dirname(of), ORIG_DIR)
+        if rel in seen:
+            continue
+        seen.add(rel)
+
+        orig_matches = glob.glob(os.path.join(ORIG_DIR, rel, "*.root"))
+        target_matches = glob.glob(os.path.join(TARGET_DIR, rel, "*.root"))
+
+        if len(orig_matches) == 1 and len(target_matches) == 1:
+            samples.append(rel)
+        else:
+            rejected.append((rel, len(orig_matches), len(target_matches)))
+
+    if rejected:
+        print(f"Warning: rejected {len(rejected)} leaf sample(s) with != 1 ROOT file:")
+        for rel, n_orig, n_target in rejected:
+            print(f"  {rel}: {n_orig} original file(s), {n_target} target file(s)")
+
+    return samples
+
 SAMPLES = get_samples()
 
 # ---------------------------------------------------------------------------
@@ -54,13 +80,13 @@ def target_file_for(wildcards):
 
 INIT_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/"
 INIT_SWD_DIR     = f"saved_swd_distribution/{TAG}/{{sample}}/"
-SAMPLES_DIR      = f"saved_samples/{TAG}/{{sample}}/{DIM}D/"
-SWD_DIR          = f"saved_swd_distribution/{TAG}/{{sample}}/{DIM}D/"
-MODEL_DIR        = f"saved_models/{TAG}/{{sample}}/{DIM}D/"
-WEIGHTS_DIR      = f"saved_weights/{TAG}/{{sample}}/{DIM}D/"
-FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/{DIM}D/"
+SAMPLES_DIR      = f"saved_samples/{TAG}/{{sample}}/custom_{DIM}D/"
+SWD_DIR          = f"saved_swd_distribution/{TAG}/{{sample}}/custom_{DIM}D/"
+MODEL_DIR        = f"saved_models/{TAG}/{{sample}}/custom_{DIM}D/"
+WEIGHTS_DIR      = f"saved_weights/{TAG}/{{sample}}/custom_{DIM}D/"
+FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/custom_{DIM}D/"
 HPS_DIR          = f"hps/{TAG}/"
-TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{DIM}D/"
+TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/custom_{DIM}D/"
 
 # Hyperparameter grid files are sample-independent (shared search space).
 HPS_FILES = []
@@ -299,11 +325,11 @@ rule run_custom_bootstrap:
 rule aggregate_custom_bootstrap:
     input:
         lambda wc: expand(
-            f"saved_swd_distribution/{TAG}/{wc.sample}/{DIM}D/indiv_bootstrap/run_{{run_id}}.npy",
+            f"saved_swd_distribution/{TAG}/{wc.sample}/custom_{DIM}D/indiv_bootstrap/run_{{run_id}}.npy",
             run_id=RUNS
         )
     output:
-        final_file=SWD_DIR + f"swd_distribution_{DIM}D.npy"
+        final_file=SWD_DIR + f"swd_distribution_custom_{DIM}D.npy"
     conda:
         ENV
     shell:
@@ -336,7 +362,7 @@ rule single_fine_tuning:
         swd_distribution_3D=INIT_SWD_DIR + "3D/swd_distribution_3D.npy",
         swd_distribution_8D=INIT_SWD_DIR + "8D/swd_distribution_8D.npy",
         swd_distribution_21D=INIT_SWD_DIR + "21D/swd_distribution_21D.npy",
-        custom_swd_distribution=SWD_DIR + f"swd_distribution_{DIM}D.npy"
+        custom_swd_distribution=SWD_DIR + f"swd_distribution_custom_{DIM}D.npy"
 
     params:
         model="{model}",
@@ -380,7 +406,7 @@ rule single_fine_tuning:
 rule fine_tuning:
     input:
         lambda wc: [
-            f"TensorBoard/{TAG}/{wc.sample}/{DIM}D/{model}/run_{run_id}_metrics.csv"
+            f"TensorBoard/{TAG}/{wc.sample}/custom_{DIM}D/{model}/run_{run_id}_metrics.csv"
             for model in MODELS
             for run_id in range(NUMBER_OF_SETS[model])
         ]
@@ -413,7 +439,7 @@ rule train_models:
     output:
         model_dir=directory(MODEL_DIR),
         weights_dir=directory(WEIGHTS_DIR),
-        save_weight_path_dict=WEIGHTS_DIR + f"weights_path_dict_{DIM}D.json"
+        save_weight_path_dict=WEIGHTS_DIR + f"weights_path_dict_custom_{DIM}D.json"
 
     conda:
         ENV
@@ -438,11 +464,11 @@ rule compute_metrics_plots:
     input:
         original_test=INIT_SAMPLES_DIR + "21D/original_test.csv",
         target_test=INIT_SAMPLES_DIR + "21D/target_test.csv",
-        weights_path=WEIGHTS_DIR + f"weights_path_dict_{DIM}D.json",
+        weights_path=WEIGHTS_DIR + f"weights_path_dict_custom_{DIM}D.json",
         swd_dist_file_3D=INIT_SWD_DIR + "3D/swd_distribution_3D.npy",
         swd_dist_file_8D=INIT_SWD_DIR + "8D/swd_distribution_8D.npy",
         swd_dist_file_21D=INIT_SWD_DIR + "21D/swd_distribution_21D.npy",
-        swd_dist_file=SWD_DIR + f"swd_distribution_{DIM}D.npy"
+        swd_dist_file=SWD_DIR + f"swd_distribution_custom_{DIM}D.npy"
 
     output:
         output_dir=directory(FIG_DIR),
@@ -485,7 +511,7 @@ rule compute_metrics_plots:
 rule all:
     input:
         expand(
-            f"saved_figures/{TAG}/{{sample}}/{DIM}D/metrics.json",
+            f"saved_figures/{TAG}/{{sample}}/custom_{DIM}D/metrics.json",
             sample=SAMPLES
         )
     

@@ -49,6 +49,7 @@ if __name__ == "__main__":
     parameter_labels = {
         "Enu_true": r"$E^{true}_{\nu}$ (GeV)",
         "Plep": r"$p_{lep}$ (GeV/c)",
+        "PLep": r"$p_{lep}$ (GeV/c)",
         "CosLep": r"$cos(\theta_{lep})$",
         "Q2": r"$Q^2$ (GeV$^2$/c$^2$)",
         "q0": r"$q_0$ (GeV)",
@@ -108,6 +109,8 @@ if __name__ == "__main__":
                         output_file=os.path.join(args.output_file, "2Dhist.pdf"))
     
     # Compute the metrics
+    idx_3d = [args.analysis_params.index(param) for param in args.params_3D]
+    idx_8d = [args.analysis_params.index(param) for param in args.params_8D]
         
     if args.compute_chi2:
         chi2_dict = {}
@@ -126,9 +129,9 @@ if __name__ == "__main__":
                 chi2_dim[param+"_p_value"] = chi2_p_value(chi2_val, dof)
             chi2_dict[key] = chi2_dim
 
-        chi2_3D_dict = chi2_dof(original_test[:, :3], target_test[:, :3], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_3D)
+        chi2_3D_dict = chi2_dof(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_3D)
         chi2_3D_p_values = {key: chi2_p_value(chi2*87, 87) for key, chi2 in chi2_3D_dict.items()}
-        chi2_8D_dict = chi2_dof(original_test[:, :8], target_test[:, :8], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_8D)
+        chi2_8D_dict = chi2_dof(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_8D)
         chi2_21D_dict = chi2_dof(original_test, target_test, weights_dict, binning_dict=binning_dict, List_param_interest = args.analysis_params)
 
 
@@ -141,8 +144,8 @@ if __name__ == "__main__":
         swd_list_3D = np.load(args.swd_distribution_3D)
         swd_list_8D = np.load(args.swd_distribution_8D)
         swd_list_21D = np.load(args.swd_distribution_21D)
-        swd_dict_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict, n_directions=args.n_directions)
-        swd_dict_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict, n_directions=args.n_directions)
+        swd_dict_3D = compute_swd(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict, n_directions=args.n_directions)
+        swd_dict_8D = compute_swd(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict, n_directions=args.n_directions)
         swd_dict_21D = compute_swd(original_test, target_test, weights_dict, n_directions=args.n_directions)
 
         p_value_dict_3D = compute_p_value(swd_dict_3D, swd_list_3D)
