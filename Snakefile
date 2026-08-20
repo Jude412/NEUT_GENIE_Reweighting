@@ -6,31 +6,30 @@ import os
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
-DIM = config["dimensions"]["dim"]
+DIM = len(config["parameters"]["reweighting"])
 NUMBER_OF_SETS = config["models"]["number_model_hyperparameters_sets"]
 MODELS = config["models"]["model_list"]
 MODES = config["analysis"]["modes"]
 MODES_v2 = config["analysis"]["modes_v2"]
 RUNS = range(config["swd_bootstrapping"]["runs"])
-NDIR = config["swd_bootstrapping"]["n_directions"]
 
-NEUT_DIR = config["paths"]["neut_dir"]
-GENIE_DIR = config["paths"]["genie_dir"]
+ORIG_DIR = config["inputs"]["original_dir"]
+TARGET_DIR = config["inputs"]["target_dir"]
 
 # ---------------------------------------------------------------------------
 # Sample discovery
-# Scan NEUT_DIR recursively for .root files; keep any whose leaf directory
-# also contains a .root file under the same relative path in GENIE_DIR.
+# Scan ORIG_DIR recursively for .root files; keep any whose leaf directory
+# also contains a .root file under the same relative path in TARGET_DIR.
 # SAMPLES is a list of relative directory paths, e.g. ["FHC/numu/H2O"].
 # ---------------------------------------------------------------------------
 
 def get_samples():
-    neut_files = glob.glob(os.path.join(NEUT_DIR, "**/*.root"), recursive=True)
+    original_files = glob.glob(os.path.join(ORIG_DIR, "**/*.root"), recursive=True)
     seen = set()
     samples = []
-    for nf in neut_files:
-        rel = os.path.relpath(os.path.dirname(nf), NEUT_DIR)
-        if rel not in seen and glob.glob(os.path.join(GENIE_DIR, rel, "*.root")):
+    for of in original_files:
+        rel = os.path.relpath(os.path.dirname(of), ORIG_DIR)
+        if rel not in seen and glob.glob(os.path.join(TARGET_DIR, rel, "*.root")):
             seen.add(rel)
             samples.append(rel)
     return samples
@@ -41,12 +40,12 @@ SAMPLES = get_samples()
 # Input functions – resolve the single .root file inside a leaf directory.
 # ---------------------------------------------------------------------------
 
-def neut_file_for(wildcards):
-    files = glob.glob(os.path.join(NEUT_DIR, wildcards.sample, "*.root"))
+def original_file_for(wildcards):
+    files = glob.glob(os.path.join(ORIG_DIR, wildcards.sample, "*.root"))
     return files[0]
 
-def genie_file_for(wildcards):
-    files = glob.glob(os.path.join(GENIE_DIR, wildcards.sample, "*.root"))
+def target_file_for(wildcards):
+    files = glob.glob(os.path.join(TARGET_DIR, wildcards.sample, "*.root"))
     return files[0]
 
 # ---------------------------------------------------------------------------
@@ -76,15 +75,21 @@ wildcard_constraints:
 
 rule initialize_analysis:
     input:
-        NEUTfile=neut_file_for,
-        GENIEfile=genie_file_for
+        original_file=original_file_for,
+        target_file=target_file_for
 
     params:
         modes=MODES,
         modes_v2=MODES_v2,
+        original_tree=config["inputs"]["original_tree"],
+        target_tree=config["inputs"]["target_tree"],
         # neutrino_PDG=config["analysis"]["neutrino_PDG"],
         train_percentage=config["analysis"]["train_percentage"],
-        val_percentage=config["analysis"]["val_percentage"]
+        val_percentage=config["analysis"]["val_percentage"],
+        branches=config["inputs"]["branches"],
+        analysis_params=config["parameters"]["all"],
+        params_8D=config["parameters"]["8D"],
+        params_3D=config["parameters"]["3D"]
 
     output:
         samples_dir_3D=directory(INIT_SAMPLES_DIR + "3D/"),
@@ -102,8 +107,14 @@ rule initialize_analysis:
     shell:
         """
         python Init.py \
-            --input_file_NEUT {input.NEUTfile} \
-            --input_file_GENIE {input.GENIEfile} \
+            --input_file_original {input.original_file} \
+            --input_file_target {input.target_file} \
+            --input_tree_original {params.original_tree} \
+            --input_tree_target {params.target_tree} \
+            --branches {params.branches} \
+            --analysis_params {params.analysis_params} \
+            --params_8D {params.params_8D} \
+            --params_3D {params.params_3D} \
             --modes {params.modes} \
             --modes_v2 {params.modes_v2} \
             --train_percentage {params.train_percentage} \
@@ -120,6 +131,8 @@ rule run_initial_bootstrap_3D:
         last_sampled_file=INIT_SAMPLES_DIR + "3D/target_test.csv"
     output:
         output_file=INIT_SWD_DIR + "3D/indiv_bootstrap/run_{run_id}.npy"
+    params:
+        n_directions=config["swd_bootstrapping"]["n_directions"]
     conda:
         ENV
     shell:
@@ -128,7 +141,7 @@ rule run_initial_bootstrap_3D:
             --distribution {input.samples_dir} \
             --output_dir $(dirname {output.output_file})/ \
             --output_file {output.output_file} \
-            --n_directions {NDIR} \
+            --n_directions {params.n_directions} \
             --random_seed {wildcards.run_id}
         """
 
@@ -156,6 +169,8 @@ rule run_initial_bootstrap_8D:
         last_sampled_file=INIT_SAMPLES_DIR + "8D/target_test.csv"
     output:
         output_file=INIT_SWD_DIR + "8D/indiv_bootstrap/run_{run_id}.npy"
+    params:
+        n_directions=config["swd_bootstrapping"]["n_directions"]
     conda:
         ENV
     shell:
@@ -164,7 +179,7 @@ rule run_initial_bootstrap_8D:
             --distribution {input.samples_dir} \
             --output_dir $(dirname {output.output_file})/ \
             --output_file {output.output_file} \
-            --n_directions {NDIR} \
+            --n_directions {params.n_directions} \
             --random_seed {wildcards.run_id}
         """
 
@@ -191,6 +206,8 @@ rule run_initial_bootstrap_21D:
         last_sampled_file=INIT_SAMPLES_DIR + "21D/target_test.csv"
     output:
         output_file=INIT_SWD_DIR + "21D/indiv_bootstrap/run_{run_id}.npy"
+    params:
+        n_directions=config["swd_bootstrapping"]["n_directions"]
     conda:
         ENV
     shell:
@@ -199,7 +216,7 @@ rule run_initial_bootstrap_21D:
             --distribution {input.samples_dir} \
             --output_dir $(dirname {output.output_file})/ \
             --output_file {output.output_file} \
-            --n_directions {NDIR} \
+            --n_directions {params.n_directions} \
             --random_seed {wildcards.run_id}
         """
 
@@ -222,16 +239,20 @@ rule aggregate_bootstrap_21D:
 
 rule custom_dim_analysis:
     input:
-        NEUTfile=neut_file_for,
-        GENIEfile=genie_file_for
+        original_file=original_file_for,
+        target_file=target_file_for
 
     params:
         modes=MODES,
         modes_v2=MODES_v2,
+        original_tree=config["inputs"]["original_tree"],
+        target_tree=config["inputs"]["target_tree"],
         # neutrino_PDG=config["analysis"]["neutrino_PDG"],
         train_percentage=config["analysis"]["train_percentage"],
         val_percentage=config["analysis"]["val_percentage"],
-        parameters_interest=config["features"]["parameters_interest"],
+        branches=config["inputs"]["branches"],
+        analysis_params=config["parameters"]["all"],
+        parameters_interest=config["parameters"]["reweighting"],
         tag=config["output"]["tag"]
 
     output:
@@ -242,8 +263,12 @@ rule custom_dim_analysis:
     shell:
         """
         python Splitting-script.py \
-            --input_file_NEUT {input.NEUTfile} \
-            --input_file_GENIE {input.GENIEfile} \
+            --input_file_original {input.original_file} \
+            --input_file_target {input.target_file} \
+            --input_tree_original {params.original_tree} \
+            --input_tree_target {params.target_tree} \
+            --branches {params.branches} \
+            --analysis_params {params.analysis_params} \
             --modes {params.modes} \
             --modes_v2 {params.modes_v2} \
             --train_percentage {params.train_percentage} \
@@ -257,6 +282,8 @@ rule run_custom_bootstrap:
         samples_dir=SAMPLES_DIR + "target_test.csv",
     output:
         output_file=SWD_DIR + "indiv_bootstrap/run_{run_id}.npy"
+    params:
+        n_directions=config["swd_bootstrapping"]["n_directions"]
     conda:
         ENV
     shell:
@@ -265,7 +292,7 @@ rule run_custom_bootstrap:
             --distribution {input.samples_dir} \
             --output_dir $(dirname {output.output_file})/ \
             --output_file {output.output_file} \
-            --n_directions {NDIR} \
+            --n_directions {params.n_directions} \
             --random_seed {wildcards.run_id}
         """
 
@@ -314,8 +341,12 @@ rule single_fine_tuning:
     params:
         model="{model}",
         logdir=TENSORBOARD_DIR + "{model}/",
-        binning_file=config["features"]["binning_file"],
-        interest_params=config["features"]["parameters_interest"]
+        binning_file=config["parameters"]["binning_file"],
+        analysis_params=config["parameters"]["all"],
+        params_8D=config["parameters"]["8D"],
+        params_3D=config["parameters"]["3D"],
+        interest_params=config["parameters"]["reweighting"],
+        n_directions=config["swd_bootstrapping"]["n_directions"]
 
     output:
         output_file=TENSORBOARD_DIR + "{model}/run_{run_id}_metrics.csv"
@@ -337,8 +368,11 @@ rule single_fine_tuning:
             --hyperparameters {input.hparam_file} \
             --logdir {params.logdir} \
             --custom_swd_distribution {input.custom_swd_distribution} \
+            --analysis_params {params.analysis_params} \
+            --params_8D {params.params_8D} \
+            --params_3D {params.params_3D} \
             --params_interest {params.interest_params} \
-            --n_directions {NDIR} \
+            --n_directions {params.n_directions} \
             --binning_file {params.binning_file} \
             --output_file {output.output_file}
         """
@@ -374,7 +408,7 @@ rule train_models:
 
     params:
         model_list=config["models"]["model_list"],
-        parameters_interest=config["features"]["parameters_interest"],
+        parameters_interest=config["parameters"]["reweighting"],
         model_list_str=config["models"]["model_list"]
     output:
         model_dir=directory(MODEL_DIR),
@@ -415,8 +449,12 @@ rule compute_metrics_plots:
         metrics_file=FIG_DIR + "metrics.json"
 
     params:
-        parameters_interest=config["features"]["parameters_interest"],
-        binning_file=config["features"]["binning_file"]
+        parameters_interest=config["parameters"]["reweighting"],
+        binning_file=config["parameters"]["binning_file"],
+        analysis_params=config["parameters"]["all"],
+        params_8D=config["parameters"]["8D"],
+        params_3D=config["parameters"]["3D"],
+        n_directions=config["swd_bootstrapping"]["n_directions"]
 
     conda:
         ENV
@@ -432,12 +470,15 @@ rule compute_metrics_plots:
             --no-make_2D_plots \
             --compute_chi2 \
             --compute_swd \
+            --analysis_params {params.analysis_params} \
+            --params_8D {params.params_8D} \
+            --params_3D {params.params_3D} \
             --interest_params {params.parameters_interest} \
             --custom_swd_distribution {input.swd_dist_file} \
             --swd_distribution_3D {input.swd_dist_file_3D} \
             --swd_distribution_8D {input.swd_dist_file_8D} \
             --swd_distribution_21D {input.swd_dist_file_21D} \
-            --n_directions {NDIR} \
+            --n_directions {params.n_directions} \
             --binning_file {params.binning_file}
         """
 

@@ -1,53 +1,22 @@
-"""The objective of this script is to create a function that takes as input a Tree ROOT file from NEUT/T2KND and to 
-return an array containing the desired parameters of interest. They are to be given as a list containing strings. One may also
-include the weights of the events in the "weights" argument."""
+"""The objective of this script is to create a function that takes as input a Tree ROOT file and to 
+return an array containing the desired parameters of interest. They are to be given as a list containing strings."""
 
-#imports    
 import numpy as np
 import uproot
 import awkward as ak
 
-def convert_NEUT_input_file_ndim(input_file, mode, neutrino_PDG, list_parameters = ["Enu_true","ELep", "CosLep"], weights = None):
-    """This function takes as input a ROOT file from NEUT/T2KND and returns an array containing the desired parameters of interest."""
-    # Open the ROOT file
-    file = uproot.open(input_file)
-    branches = ["Mode", "PDGnu"] + list_parameters
-    tree = file["FlatTree_VARS"].arrays(branches, library="ak")
-    # we want to extract the needed mode and neutrino type
-    mask = (tree["Mode"] == mode) & (tree["PDGnu"] == neutrino_PDG)
-    mode_tree = tree[mask]
-    # we now compute the parameters of interest
-    # watch out, paramters such as cos(theta) may need to be converted later on
-    param_values = []
-    for param in list_parameters:
-        param_values.append(ak.to_numpy(mode_tree[param]))
-    data = np.array(np.column_stack(param_values))
-    ## Check for NaN
-    for i in range(data.shape[1]):
-        if np.isnan(data[:, i]).any():
-            print(f"Warning: NaN values found in column {i} of the data array.")
-            data = data[~np.isnan(data[:, i])].copy()
-        else:
-            pass
-    if weights is not None:
-        weights = ak.to_numpy(mode_tree[weights])
-        return data, weights
-    else:
-        return data
-    
-
-def convert_NEUT_input_file_alldim(input_file, modes = None, modes_v2 = None):
-    """This function takes as input a ROOT FlatTree from Nuisance and returns an array containing all the parameters of interest.
+def convert_input_file(input_file, input_tree, branches, analysis_params, modes = None, modes_v2 = None):
+    """This function takes as input a ROOT FlatTree from and returns an array containing all the parameters of interest.
     They are : E_nu, E_lep, cos(theta_lep), Q2, q0, q3, W, Eav, y, neutrino PDG, interaction, mode, charged current,
     hit nucleus atomic number, hit nucleon PDG, multiplicity of final state proton, neutron, pions and the sum of their kinetic energies. """
     # Open the ROOT file
     file = uproot.open(input_file)
-    branches = ["Enu_true", "ELep", "CosLep", "Eav", "Q2", "q0", "q3", "W", "y",
-                 "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "pdg_vert", "px", "py", "pz"]
-    List_final_params = ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "W", "Eav", "y", "PTlep",
-                 "PDGnu", "Mode", "Mode_v2", "cc", "hitnuc", "A", "N_n", "K_n", "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
-    tree = file["FlatTree_VARS"].arrays(branches, library="ak")
+    tree = file[input_tree].arrays(branches, library="ak")
     
+    tree["W"] = tree["W_nuc_rest"]
+    # For dealing with modes, we use absolute value to allow common treatment of neutrinos and antineutrinos. No ambiguity arises because separate BDTs are trained for neutrinos and antineutrinos.
+    tree["Mode"] = abs(tree["Mode"])
+
     weird_modes = [11, 12, 13, 17, 31, 32, 33, 34, 38, 39]
     if modes is None:
         modes = np.unique(tree["Mode"])
@@ -73,21 +42,27 @@ def convert_NEUT_input_file_alldim(input_file, modes = None, modes_v2 = None):
     tree["Plep"] = np.sqrt(px_lep**2 + py_lep**2 + pz_lep**2)
     tree["PTlep"] = np.sqrt(px_lep**2 + py_lep**2)
 
-    # A (this may change, since there might be different nuclei in the same file later on)
-    coherent_mask = tree["Mode"] == 16
-    A_value_string = np.unique(tree[coherent_mask]["pdg_vert"][:, 1])[0] # format : 10LZZZAAAI
-    A_value = int(str(A_value_string)[3:6])
-    tree["A"] = A_value
-    # hitnucleon
-    coherent_like_mask = ((tree["Mode"] == 16) | (tree["Mode"] == 36) | (tree["Mode"] == 2) | (tree["Mode"] == 32))
-    tree["hitnuc"] = ak.where(
-        coherent_like_mask,
-        -999,
-        ak.where(tree["pdg_vert"][:, 1] == 1000080160,
-                 tree["pdg_vert"][:, 2],
-             tree["pdg_vert"][:, 1])
-                )
-    #cut the tree to the desired modes if specified
+
+    # Note that the Hank-generated files have no pdg_vert branch, so the following fields can't be created. 
+    # This is fine as we will be using a separate BDT per nucleus
+
+    # # A (this may change, since there might be different nuclei in the same file later on)
+    # coherent_mask = tree["Mode"] == 16
+    # A_value_string = np.unique(tree[coherent_mask]["pdg_vert"][:, 1])[0] # format : 10LZZZAAAI
+    # A_value = int(str(A_value_string)[3:6])
+    # tree["A"] = A_value
+    # # hitnucleon
+    # coherent_like_mask = ((tree["Mode"] == 16) | (tree["Mode"] == 36) | (tree["Mode"] == 2) | (tree["Mode"] == 32))
+    # tree["hitnuc"] = ak.where(
+    #     coherent_like_mask,
+    #     -999,
+    #     ak.where(tree["pdg_vert"][:, 1] == 1000080160,
+    #              tree["pdg_vert"][:, 2],
+    #          tree["pdg_vert"][:, 1])
+    #             )
+
+
+    # cut the tree to the desired modes if specified
     if modes is not None:
         mask = False
         for m in modes:
@@ -172,7 +147,7 @@ def convert_NEUT_input_file_alldim(input_file, modes = None, modes_v2 = None):
 
     # we now create the final array containing the parameters of interest
     param_values = []
-    for param in List_final_params:
+    for param in analysis_params:
         param_values.append(ak.to_numpy(tree[param]))
     data = np.array(np.column_stack(param_values))
     ## Check for NaN

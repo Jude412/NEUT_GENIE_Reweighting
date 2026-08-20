@@ -29,8 +29,11 @@ if __name__ == "__main__":
     argparser.add_argument('--make_2D_plots', action=argparse.BooleanOptionalAction, help='Whether to make the 2D plots or not.')
     argparser.add_argument('--compute_chi2', action=argparse.BooleanOptionalAction, help='Whether to compute the Chi2 statistic or not.')
     argparser.add_argument('--compute_swd', action=argparse.BooleanOptionalAction, help='Whether to compute the SWD metric or not.')
+    argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
+    argparser.add_argument("--params_8D", nargs="+", help="List of parameters to use in 8D samples.")
+    argparser.add_argument("--params_3D", nargs="+", help="List of parameters to use in 3D samples.")
     argparser.add_argument('--interest_params', nargs='+', required=False, help='Parameters used for the custom SWD distribution, in the format "param1,param2,...".',
-                            default = "Enu_True ELep CosThetaLep")
+                            default = ["Enu_true", "Plep", "CosLep"])
     argparser.add_argument('--custom_swd_distribution', type=str, required=False, help='Path to a custom SWD distribution to compute the p-value with.')
     argparser.add_argument("--swd_distribution_3D", type=str, required=False, help="Path to the SWD distribution file or to store it.", 
                         default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_3D_test20p.npy")
@@ -43,16 +46,34 @@ if __name__ == "__main__":
                            default="/vols/dune/jmm224/t2knova/reweighting/binnings.json")
     args = argparser.parse_args()
 
-    List_all_parameters = ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav", "W", "y", "Mode", "Mode_v2",
-                "cc", "hitnuc", "N_n", "K_n", "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
+    parameter_labels = {
+        "Enu_true": r"$E^{true}_{\nu}$ (GeV)",
+        "Plep": r"$p_{lep}$ (GeV/c)",
+        "CosLep": r"$cos(\theta_{lep})$",
+        "Q2": r"$Q^2$ (GeV$^2$/c$^2$)",
+        "q0": r"$q_0$ (GeV)",
+        "q3": r"$q_3$ (GeV/c)",
+        "PTlep": r"$p^T_{lep}$ (GeV/c)",
+        "Eav": r"$E_{Av}$ (GeV)",
+        "W": r"$W$ (GeV/c$^2$)",
+        "y": "y",
+        "Mode": "Mode",
+        "Mode_v2": "Mode_v2",
+        "cc": "cc",
+        "hitnuc": "hitnuc",
+        "N_n": r"$N_n$",
+        "K_n": r"$K_n$ (GeV)",
+        "N_p": r"$N_p$",
+        "K_p": r"$K_p$ (GeV)",
+        "N_pi0": r"$N_{pi^0}$",
+        "K_pi0": r"$K_{pi^0}$ (GeV)",
+        "N_pip": r"$N_{pi^+}$",
+        "K_pip": r"$K_{pi^+}$ (GeV)",
+        "N_pim": r"$N_{pi^-}$",
+        "K_pim": r"$K_{pi^-}$ (GeV)"
+    }
     
-    List_labels_all_parameters = [r"$E^{true}_{\nu}$ (GeV)", r"$p_{lep}$ (GeV/c)", r"$cos(\theta_{lep})$",
-                                r"$Q^2$ (GeV$^2$/c$^2$)", r"$q_0$ (GeV)", r"$q_3$ (GeV/c)", r"$p^T_{lep}$ (GeV/c)",
-                                r"$E_{Av}$ (GeV)", r"$W$ (GeV/c$^2$)", "y", "Mode", "Mode_v2",
-                                "cc", "hitnuc", r"$N_n$", r"$K_n$ (GeV)", r"$N_p$", r"$K_p$ (GeV)", r"$N_{pi^0}$", r"$K_{pi^0}$ (GeV)", r"$N_{pi^+}$", r"$K_{pi^+}$ (GeV)",
-                                r"$N_{pi^-}$", r"$K_{pi^-}$ (GeV)"]
-    
-    Index_parameters = [List_all_parameters.index(param) for param in args.interest_params]
+    Index_parameters = [args.analysis_params.index(param) for param in args.interest_params]
 
     # We load the data and the weights
     original_test = np.loadtxt(args.original_test, delimiter=",")
@@ -75,8 +96,8 @@ if __name__ == "__main__":
     if args.make_1D_plots:
         plot_histograms(original_test, target_test, weights_dict,
                         dict_binning=binning_dict,
-                        xlabels = List_labels_all_parameters,
-                        variables = List_all_parameters, 
+                        xlabels = [parameter_labels[param] for param in args.analysis_params],
+                        variables = args.analysis_params, 
                         output_file=os.path.join(args.output_file, "1Dhist.pdf"))
     
     if args.make_2D_plots:
@@ -92,8 +113,8 @@ if __name__ == "__main__":
         chi2_dict = {}
         for key in weights_dict.keys():
             chi2_dim = {}
-            for param in List_all_parameters:
-                param_index = List_all_parameters.index(param)
+            for param in args.analysis_params:
+                param_index = args.analysis_params.index(param)
                 if param in binning_dict.keys():
                     x_min, x_max = binning_dict[param]["x_min"], binning_dict[param]["x_max"]
                     n_bins = binning_dict[param]["n_bins"]
@@ -105,24 +126,24 @@ if __name__ == "__main__":
                 chi2_dim[param+"_p_value"] = chi2_p_value(chi2_val, dof)
             chi2_dict[key] = chi2_dim
 
-        chi2_3D_dict = chi2_dof(original_test[:, :3], target_test[:, :3], weights_dict, binning_dict=binning_dict, List_param_interest = List_all_parameters[:3])
+        chi2_3D_dict = chi2_dof(original_test[:, :3], target_test[:, :3], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_3D)
         chi2_3D_p_values = {key: chi2_p_value(chi2*87, 87) for key, chi2 in chi2_3D_dict.items()}
-        chi2_8D_dict = chi2_dof(original_test[:, :8], target_test[:, :8], weights_dict, binning_dict=binning_dict, List_param_interest = List_all_parameters[:8])
-        chi2_21D_dict = chi2_dof(original_test, target_test, weights_dict, binning_dict=binning_dict, List_param_interest = List_all_parameters)
+        chi2_8D_dict = chi2_dof(original_test[:, :8], target_test[:, :8], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_8D)
+        chi2_21D_dict = chi2_dof(original_test, target_test, weights_dict, binning_dict=binning_dict, List_param_interest = args.analysis_params)
 
 
     if args.compute_swd:
         if args.custom_swd_distribution is not None:
             swd_custom_list = np.load(args.custom_swd_distribution)
-            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters], weights_dict, n_directions=argparser.n_directions)
+            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters], weights_dict, n_directions=args.n_directions)
             p_value_dict_custom = compute_p_value(swd_dict_custom, swd_custom_list)
 
         swd_list_3D = np.load(args.swd_distribution_3D)
         swd_list_8D = np.load(args.swd_distribution_8D)
         swd_list_21D = np.load(args.swd_distribution_21D)
-        swd_dict_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict, n_directions=argparser.n_directions)
-        swd_dict_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict, n_directions=argparser.n_directions)
-        swd_dict_21D = compute_swd(original_test, target_test, weights_dict, n_directions=argparse.n_directions)
+        swd_dict_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict, n_directions=args.n_directions)
+        swd_dict_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict, n_directions=args.n_directions)
+        swd_dict_21D = compute_swd(original_test, target_test, weights_dict, n_directions=args.n_directions)
 
         p_value_dict_3D = compute_p_value(swd_dict_3D, swd_list_3D)
         p_value_dict_8D = compute_p_value(swd_dict_8D, swd_list_8D)
