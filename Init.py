@@ -46,15 +46,14 @@ if __name__ == "__main__":
     # Getting data from the files
     print("Getting data from the files...")
     
-    index_all_params = [args.analysis_params.index(param) for param in args.analysis_params]
     Index_8D_params = [args.analysis_params.index(param) for param in args.params_8D]
     Index_3D_params = [args.analysis_params.index(param) for param in args.params_3D]
 
     original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
     target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
 
-    original_all = original[:, index_all_params]
-    target_all = target[:, index_all_params]
+    original_all = original
+    target_all = target
 
     original_8D = original[:, Index_8D_params]
     target_8D = target[:, Index_8D_params]
