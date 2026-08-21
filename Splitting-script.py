@@ -1,12 +1,11 @@
-"""The goal of this script is to read the Nuisance files from GENIE/NEUT and to give the splitted
-samples as output. We extensively use the code from NEUTFile_conv_ndim.py, GENIEFile_conv_ndim.py and Sample_creation.py. 
+"""The goal of this script is to read the files from GENIE/NEUT and to give the splitted
+samples as output.
 The user can choose the percentage of the training and validation samples, as well as the random seed for reproducibility. 
 The output samples are numpy arrays that will be used to train the reweighting techniques and validate their performance.
 They are saved as csv files in a specified directory. The script can be run from the command line with the appropriate arguments."""
 
 #imports 
-from NEUTFile_conv_ndim import convert_NEUT_input_file_ndim, convert_NEUT_input_file_alldim
-from GENIEFile_conv_ndim import convert_GENIE_input_file_ndim, convert_GENIE_input_file_alldim
+from ROOT_file_conv import convert_input_file
 from Sample_creation import create_samples
 import numpy as np
 import argparse
@@ -14,10 +13,16 @@ import os
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Script to create the training and validation samples for the reweighting techniques.")
-    argparser.add_argument("--input_file_NEUT", required=False, type=str, help="Path to the input ROOT file from Nuisance (that used NEUT as generator).",
+    argparser.add_argument("--input_file_original", required=False, type=str, help="Path to the original input ROOT file.",
                            default="/vols/dune/jmm224/t2knova/reweighting/NEUT_files/T2KND_FHC_numu_H2O_NEUT562_1M_0000_NUISFLAT.root")
-    argparser.add_argument("--input_file_GENIE", required=False, type=str, help="Path to the input ROOT file from Nuisance (that used GENIE as generator).",
+    argparser.add_argument("--input_file_target", required=False, type=str, help="Path to the target input ROOT file.",
                            default="/vols/dune/jmm224/t2knova/reweighting/GENIE_files/T2KND_FHC_numu_H2O_GENIEv3_G18_10b_00_000_1M_0000_NUISFLAT.root")
+    argparser.add_argument("--input_tree_original", required=False, type=str, help="Name of the FlatTree in the original input file.",
+                           default="FlatTree_VARS")
+    argparser.add_argument("--input_tree_target", required=False, type=str, help="Name of the FlatTree in the target input file.",
+                           default="FlatTree_VARS")
+    argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
+    argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
     argparser.add_argument("--modes", type=int, nargs="+", required=False, help="Interaction modes to select (e.g. 1 for CCQE).", default=[1] )
     argparser.add_argument("--modes_v2", type=int, nargs="+", required=False, help="Interaction modes v2 to select (e.g. 1 for CCQE).", default=[1] )
     # argparser.add_argument("--neutrino_PDG", type=int, required=False, help="PDG code of the neutrino type to select (e.g. 14 for numu).", default = 14)
@@ -33,14 +38,14 @@ if __name__ == "__main__":
 
     # Getting data from the files
     print("Getting data from the files...")
-    List_all_params = ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "W", "Eav", "y", "PTlep",
-                 "PDGnu", "Mode", "Mode_v2", "cc", "hitnuc", "A", "N_n", "K_n", "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
-    Params_of_interest = args.parameters_interest
-    original_load = convert_NEUT_input_file_alldim(args.input_file_NEUT, modes = args.modes, modes_v2 = args.modes_v2)
-    target_load = convert_GENIE_input_file_alldim(args.input_file_GENIE, modes = args.modes, modes_v2 = args.modes_v2)
 
-    original = original_load[:, [List_all_params.index(param) for param in Params_of_interest]]
-    target = target_load[:, [List_all_params.index(param) for param in Params_of_interest]]
+    Params_of_interest = args.parameters_interest
+
+    original_load = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
+    target_load = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
+
+    original = original_load[:, [args.analysis_params.index(param) for param in args.parameters_interest]]
+    target = target_load[:, [args.analysis_params.index(param) for param in args.parameters_interest]]
 
     # We split the data into a training and validation set
     print("Splitting data into training, validation and test samples...")
