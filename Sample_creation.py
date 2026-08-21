@@ -6,6 +6,12 @@ samples is determined by the user. The function returns the samples as numpy arr
 import numpy as np
 
 def create_samples(distribution, percentage_train, percentage_val, random_seed = 42, weights = None):
+    if distribution.shape[0] == 0:
+        raise ValueError(
+            "Cannot create samples from an empty distribution (0 events). "
+            "Check your sample selection and mode filters."
+        )
+
     indices = np.arange(distribution.shape[0])
     np.random.seed(random_seed)
     train_idx = np.random.choice(indices, size=int(percentage_train*len(distribution)), replace=False)
