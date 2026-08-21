@@ -16,12 +16,12 @@ import pickle
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description='Evaluate the performance of reweighting methods.')
-    argparser.add_argument('--original_test', type=str, required=False, help='Path to the original 21D test dataset (csv).',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/original_test_21D.csv')
-    argparser.add_argument('--target_test', type=str, required=False, help='Path to the target 21D test dataset (csv).',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/target_test_21D.csv')
+    argparser.add_argument('--original_test', type=str, required=False, help='Path to the original test dataset containing all configured analysis parameters (csv).',
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/original_test_all.csv')
+    argparser.add_argument('--target_test', type=str, required=False, help='Path to the target test dataset containing all configured analysis parameters (csv).',
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/target_test_all.csv')
     argparser.add_argument('--weights_paths', type=str, required=False,
-                           help = "path to the json file containing a dictionnary with each method and path to its predicted weights (csv).",
+                           help = "path to the json file containing a dictionary with each method and path to its predicted weights (csv).",
                            default='/vols/dune/jmm224/t2knova/reweighting/make_metrics.json')
     argparser.add_argument('--output_file', type=str, required=False, help='File to save the output plots and metrics.',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios')
@@ -39,8 +39,8 @@ if __name__ == "__main__":
                         default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_3D_test20p.npy")
     argparser.add_argument("--swd_distribution_8D", type=str, required=False, help="Path to the SWD distribution file or to store it.",
                             default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_8D_test20p.npy")
-    argparser.add_argument("--swd_distribution_21D", type=str, required=False, help="Path to the SWD distribution file or to store it.",
-                            default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_21D_test20p.npy")
+    argparser.add_argument("--swd_distribution_all", "--swd_distribution_21D", dest="swd_distribution_all", type=str, required=False, help="Path to the all-parameters SWD distribution file or to store it.",
+                            default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_all_test20p.npy")
     argparser.add_argument('--n_directions', type=int, default=500, help="Number of directions to draw for each bootstrap")
     argparser.add_argument("--binning_file", type=str, required=False, help="Path to the json file containing the binning information for each parameter.",
                            default="/vols/dune/jmm224/t2knova/reweighting/binnings.json")
@@ -132,7 +132,7 @@ if __name__ == "__main__":
         chi2_3D_dict = chi2_dof(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_3D)
         chi2_3D_p_values = {key: chi2_p_value(chi2*87, 87) for key, chi2 in chi2_3D_dict.items()}
         chi2_8D_dict = chi2_dof(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_8D)
-        chi2_21D_dict = chi2_dof(original_test, target_test, weights_dict, binning_dict=binning_dict, List_param_interest = args.analysis_params)
+        chi2_all_dict = chi2_dof(original_test, target_test, weights_dict, binning_dict=binning_dict, List_param_interest = args.analysis_params)
 
 
     if args.compute_swd:
@@ -143,14 +143,14 @@ if __name__ == "__main__":
 
         swd_list_3D = np.load(args.swd_distribution_3D)
         swd_list_8D = np.load(args.swd_distribution_8D)
-        swd_list_21D = np.load(args.swd_distribution_21D)
+        swd_list_all = np.load(args.swd_distribution_all)
         swd_dict_3D = compute_swd(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict, n_directions=args.n_directions)
         swd_dict_8D = compute_swd(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict, n_directions=args.n_directions)
-        swd_dict_21D = compute_swd(original_test, target_test, weights_dict, n_directions=args.n_directions)
+        swd_dict_all = compute_swd(original_test, target_test, weights_dict, n_directions=args.n_directions)
 
         p_value_dict_3D = compute_p_value(swd_dict_3D, swd_list_3D)
         p_value_dict_8D = compute_p_value(swd_dict_8D, swd_list_8D)
-        p_value_dict_21D = compute_p_value(swd_dict_21D, swd_list_21D)
+        p_value_dict_all = compute_p_value(swd_dict_all, swd_list_all)
 
     # Save the metrics in a json file
     metrics_dict = {}
@@ -160,7 +160,7 @@ if __name__ == "__main__":
         metrics_dict['chi2_3D'] = chi2_3D_dict
         metrics_dict['chi2_3D_p_value'] = chi2_3D_p_values
         metrics_dict['chi2_8D'] = chi2_8D_dict
-        metrics_dict['chi2_21D'] = chi2_21D_dict
+        metrics_dict['chi2_all'] = chi2_all_dict
     if args.compute_swd:
         if args.custom_swd_distribution is not None:
             metrics_dict['swd_custom'] = swd_dict_custom
@@ -168,10 +168,10 @@ if __name__ == "__main__":
 
         metrics_dict['swd_3D'] = swd_dict_3D
         metrics_dict['swd_8D'] = swd_dict_8D
-        metrics_dict['swd_21D'] = swd_dict_21D
+        metrics_dict['swd_all'] = swd_dict_all
         metrics_dict['p_value_3D'] = p_value_dict_3D
         metrics_dict['p_value_8D'] = p_value_dict_8D
-        metrics_dict['p_value_21D'] = p_value_dict_21D
+        metrics_dict['p_value_all'] = p_value_dict_all
     with open(os.path.join(args.output_file, "metrics.json"), 'w') as f:
         json.dump(metrics_dict, f, indent=0)
 
