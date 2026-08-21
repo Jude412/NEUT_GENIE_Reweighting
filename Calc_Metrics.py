@@ -21,7 +21,7 @@ if __name__ == "__main__":
     argparser.add_argument('--target_test', type=str, required=False, help='Path to the target test dataset containing all configured analysis parameters (csv).',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/target_test_all.csv')
     argparser.add_argument('--weights_paths', type=str, required=False,
-                           help = "path to the json file containing a dictionnary with each method and path to its predicted weights (csv).",
+                           help = "path to the json file containing a dictionary with each method and path to its predicted weights (csv).",
                            default='/vols/dune/jmm224/t2knova/reweighting/make_metrics.json')
     argparser.add_argument('--output_file', type=str, required=False, help='File to save the output plots and metrics.',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios')
