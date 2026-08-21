@@ -25,12 +25,13 @@ def minimum_events(percentage_train, percentage_val, max_events = 1000):
 
 def create_samples(distribution, percentage_train, percentage_val, random_seed = 42, weights = None):
     n_events = distribution.shape[0]
-    if n_events < minimum_events(percentage_train, percentage_val):
+    min_events = minimum_events(percentage_train, percentage_val)
+    if n_events < min_events:
         raise ValueError(
             f"Cannot split a distribution of {n_events} event(s) into a non-empty training, "
             f"validation and test sample with a training percentage of {percentage_train} and a "
             f"validation percentage of {percentage_val}: at least "
-            f"{minimum_events(percentage_train, percentage_val)} events are needed. "
+            f"{min_events} events are needed. "
             "Check your sample selection and mode filters."
         )
 
