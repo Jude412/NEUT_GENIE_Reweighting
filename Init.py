@@ -4,7 +4,7 @@ saved in the "saved_swd_distribution + --output_dir" directory."""
 
 # Imports 
 from ROOT_file_conv import convert_input_file
-from Sample_creation import create_samples
+from Sample_creation import create_samples, minimum_events
 import numpy as np
 import argparse
 import os
@@ -52,11 +52,14 @@ if __name__ == "__main__":
     original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
     target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
 
+    min_events = minimum_events(args.train_percentage, args.val_percentage)
     for name, dataset in (("original", original), ("target", target)):
-        if len(dataset) < 2:
+        if len(dataset) < min_events:
             raise ValueError(
                 f"The {name} distribution holds {len(dataset)} event(s) for the topologies {args.topologies}. "
-                "At least 2 events are needed to build the training, validation and test samples. "
+                f"At least {min_events} events are needed to build the training, validation and test samples "
+                f"with a training percentage of {args.train_percentage} and a validation percentage of "
+                f"{args.val_percentage}. "
                 "Such sparse topologies are skipped automatically when running the whole workflow."
             )
 

@@ -22,9 +22,11 @@ In the 'analysis' section, you can specify
     -the topologies to analyse, given by name and picked from : CC0pi, CC1pipm, CC1pi0, CCNpi, CCgamma, CCOther, NCInc and rest.
      A separate training is run for each listed topology, and the results are saved in a sub-directory named after the topology.
      Before anything else, the events of each topology are counted in every sample (and saved in
-     'saved_samples/{tag}/{sample}/topology_counts.json'). If a topology holds 0 or 1 event in either the original or the
-     target file of a sample, a warning is printed and no training is carried out for that topology in that sample.
-     The same topology is still trained on in the samples where it holds more than one event.
+     'saved_samples/{tag}/{sample}/topology_counts.json'). If a topology holds too few events in either the original or the
+     target file of a sample to be split into non-empty training, validation and test samples, a warning is printed and no
+     training is carried out for that topology in that sample. The minimum number of events follows from the train and
+     validation percentages set below (3 events with the default 0.4/0.4 split, since int(0.4*2) = 0 would leave the
+     training and validation samples empty). The same topology is still trained on in the samples where it is filled enough.
     -the PDG number of the interacting neutrino (default is 14 for muon neutrino)
     -the train_percentage which defines the amount of data that go into your training sample (default is 0.4, should be between 0 and 1)
     -the val_percentage which defines the amount of data that go into your validation sample (default is 0.4, should be between 0 and 1)

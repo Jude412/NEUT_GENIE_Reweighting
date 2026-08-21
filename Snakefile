@@ -5,6 +5,8 @@ import json
 import os
 import re
 
+from Sample_creation import minimum_events
+
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
 DIM = len(config["parameters"]["reweighting"])
@@ -93,12 +95,17 @@ wildcard_constraints:
 
 # ---------------------------------------------------------------------------
 # Topology filtering
-# A topology holding a single event (or none) cannot be split into training,
-# validation and test samples, so it is skipped for the sample it is empty in.
+# A topology holding too few events cannot be split into training, validation
+# and test samples, so it is skipped for the sample it is too sparse in.
+# The minimum depends on the configured split percentages: with the default
+# 40%/40% split, 3 events are needed (2 events would give int(0.4*2) = 0
+# training and 0 validation events).
 # The same topology is still trained on in the samples where it is filled.
 # ---------------------------------------------------------------------------
 
-MIN_EVENTS_PER_TOPOLOGY = 2
+MIN_EVENTS_PER_TOPOLOGY = minimum_events(
+    config["analysis"]["train_percentage"], config["analysis"]["val_percentage"]
+)
 TOPOLOGY_COUNTS_FILE = f"saved_samples/{TAG}/{{sample}}/topology_counts.json"
 
 def topologies_for_sample(sample):
