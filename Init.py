@@ -25,8 +25,8 @@ if __name__ == "__main__":
     argparser.add_argument("--params_3D", nargs="+", help="List of parameters to use in 3D samples.")
     argparser.add_argument("--modes", type=int, nargs="+", help="Interaction modes to select (e.g. 1 for CCQE).",
                            required=False, default=[1])
-    argparser.add_argument("--topologies", type=int, nargs="+", help="Interaction topologies to select (e.g. 1 for CC0pi).",
-                           required=False, default=[1])
+    argparser.add_argument("--topologies", type=str, nargs="+", help="Interaction topologies to select, given by name (e.g. CC0pi).",
+                           required=False, default=["CC0pi"])
     # argparser.add_argument("--neutrino_PDG", type=int, help="PDG code of the neutrino type to select (e.g. 14 for numu).", 
     #                        required=False, default = 14)
     argparser.add_argument("--train_percentage", type=float, help="Percentage of the training sample (between 0 and 1).",

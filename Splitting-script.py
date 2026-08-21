@@ -24,7 +24,7 @@ if __name__ == "__main__":
     argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
     argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
     argparser.add_argument("--modes", type=int, nargs="+", required=False, help="Interaction modes to select (e.g. 1 for CCQE).", default=[1] )
-    argparser.add_argument("--topologies", type=int, nargs="+", required=False, help="Interaction topologies to select (e.g. 1 for CCQE).", default=[1] )
+    argparser.add_argument("--topologies", type=str, nargs="+", required=False, help="Interaction topologies to select, given by name (e.g. CC0pi).", default=["CC0pi"] )
     # argparser.add_argument("--neutrino_PDG", type=int, required=False, help="PDG code of the neutrino type to select (e.g. 14 for numu).", default = 14)
     argparser.add_argument("--train_percentage", type=float, required=False, help="Percentage of the training sample (between 0 and 1).", default=0.4)
     argparser.add_argument("--val_percentage", type=float, required=False, help="Percentage of the validation sample (between 0 and 1).", default=0.4)

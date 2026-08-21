@@ -5,6 +5,31 @@ import numpy as np
 import uproot
 import awkward as ak
 
+# Mapping between the topology names (used in the config file and as the {topology} wildcard
+# of the workflow) and the integer values stored in the "Topology" parameter.
+TOPOLOGY_CODES = {
+    "CC0pi": 0,
+    "CC1pipm": 1,
+    "CC1pi0": 2,
+    "CCNpi": 3,
+    "CCgamma": 4,
+    "CCOther": 5,
+    "NCInc": 6,
+    "rest": 7,
+}
+
+def topology_code(topology):
+    """Return the integer code of a topology given either its name (ex: 'CC1pipm') or its code (ex: 1)."""
+    if isinstance(topology, str):
+        if topology in TOPOLOGY_CODES:
+            return TOPOLOGY_CODES[topology]
+        if not topology.isdigit():
+            raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
+        topology = int(topology)
+    if topology not in TOPOLOGY_CODES.values():
+        raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
+    return int(topology)
+
 def convert_input_file(input_file, input_tree, branches, analysis_params, modes = None, topologies = None):
     """This function takes as input a ROOT FlatTree from and returns an array containing all the parameters of interest.
     They are : E_nu, E_lep, cos(theta_lep), Q2, q0, q3, W, Eav, y, neutrino PDG, interaction, mode, charged current,
@@ -95,7 +120,7 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
 
 
     # we create a topology parameter that gathers the modes based on the number of pions in the final state
-    # We choose the following mapping : 0 for CC0pi, 1 for CC1pipm, 2 for CC1pi0, 3 for CCNpi, 4 for CCOther, 5 for the rest, 6 for CCgamma, 7 for CCOther_QE
+    # We choose the following mapping : 0 for CC0pi, 1 for CC1pipm, 2 for CC1pi0, 3 for CCNpi, 4 for CCgamma, 5 for CCOther, 6 for NCInc, 7 for rest
     mask_CC0pi = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] + tree["N_pi0"] == 0) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only nucleons
     mask_CC1pipm = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] == 1) & (tree["N_pi0"] == 0) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only one charged pion and nucleons
     mask_CC1pi0 = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] == 0) & (tree["N_pi0"] == 1) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only one neutral pion and nucleons
@@ -115,19 +140,14 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
 
 
     # cut the tree to the desired topology if desired
+    # Topologies can be given either by name (ex: "CC1pipm") or by code (ex: 1).
 
     if topologies is not None:
         mask = False
         for m in topologies:
-            mask = mask | (tree["Topology"] == m)
+            mask = mask | (tree["Topology"] == topology_code(m))
 
         tree = tree[mask]
-
-    if 6 not in topologies:
-        print("Warning : the CCgamma mode is not included. If you want to include it, please add 6 to the topologies list.")
-
-    if 7 not in topologies:
-        print("Warning : the CCOther_QE mode is not included. If you want to include it, please add 7 to the topologies list.")
 
     # we now create the final array containing the parameters of interest
     param_values = []

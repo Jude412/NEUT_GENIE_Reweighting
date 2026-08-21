@@ -19,6 +19,8 @@ Also in the 'config.yaml' file, you can change several parameters for your analy
 
 In the 'analysis' section, you can specify 
     -the interaction mode number (default is 1 for CCQE), 
+    -the topologies to analyse, given by name and picked from : CC0pi, CC1pipm, CC1pi0, CCNpi, CCgamma, CCOther, NCInc and rest.
+     A separate training is run for each listed topology, and the results are saved in a sub-directory named after the topology.
     -the PDG number of the interacting neutrino (default is 14 for muon neutrino)
     -the train_percentage which defines the amount of data that go into your training sample (default is 0.4, should be between 0 and 1)
     -the val_percentage which defines the amount of data that go into your validation sample (default is 0.4, should be between 0 and 1)
@@ -53,9 +55,16 @@ Please give as many sets as different method you want to train.
 Once all the above steps are completed, you are ready to run the analysis.
 To run a complete analysis, including samples creation, model training, metrics evaluation and plotting, enter the following command in your terminal: 
 
-snakemake saved_figures/snakemake_test/{Dim}D/metrics.json --cores 8  (--use-conda  (only if you use conda))
+snakemake all --cores 8  (--use-conda  (only if you use conda))
 
-where {Dim} should be replaced by the number of dimensions given in the 'dimensions'/'dim' section of the 'config.yaml' file.
+This runs every sample found in the input directories, for every topology listed in the config file.
+To run a single sample/topology combination, you can also ask for one output file directly, for example:
+
+snakemake saved_figures/{tag}/{sample}/{topology}/custom_{Dim}D/metrics.json --cores 8  (--use-conda  (only if you use conda))
+
+where {tag} is the tag given in the 'output'/'tag' section, {sample} is the relative path of the sample (ex : FHC/numu/H2O),
+{topology} is one of the topologies listed in the 'analysis'/'topologies' section (ex : CC0pi) and {Dim} is the number of
+dimensions given in the 'dimensions'/'dim' section of the 'config.yaml' file.
 Once finished, you can explore the different 'saved' folders containing the samples, models, metrics and plots.
 
 Congrats, you ran your first analysis !

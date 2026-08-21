@@ -40,16 +40,17 @@ analysis:
     #choose in 1, 2, 11, 12, 13, 16, 17, 21, 22, 23, 26, 31, 32, 33, 34, 36, 38, 39, 41, 42, 43, 44, 45, 46, 51 and 52
 
   topologies:
-    - 0
-    # - 1
-    # - 2 
-    # - 3
-    # - 4
-    # - 5
-    # - 6
-    # - 7
+    - CC0pi
+    # - CC1pipm
+    # - CC1pi0
+    # - CCNpi
+    # - CCgamma
+    # - CCOther
+    # - NCInc
+    # - rest
 
-  #choose in 0, 1, 2, 3, 4, 5, 6 and 7 (0 for CC0pi, 1 for CC1pipm, 2 for CC1pi0, 3 for CCNpi, 4 for CCgamma, 5 for CCOther, 6 for NCInc, 7 for rest (should be nothing here))
+  #choose in CC0pi, CC1pipm, CC1pi0, CCNpi, CCgamma, CCOther, NCInc and rest (rest should be empty)
+  #a separate training is run for each listed topology
 
 
   neutrino_PDG: 14
