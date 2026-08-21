@@ -52,9 +52,6 @@ if __name__ == "__main__":
     original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
     target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
 
-    original_all = original
-    target_all = target
-
     original_8D = original[:, Index_8D_params]
     target_8D = target[:, Index_8D_params]
 
@@ -63,8 +60,8 @@ if __name__ == "__main__":
 
     # Splitting data
     print("Splitting data into training, validation and test samples...")
-    original_train, original_val, original_test = create_samples(original_all, args.train_percentage, args.val_percentage, args.random_seeds[0])
-    target_train, target_val, target_test = create_samples(target_all, args.train_percentage, args.val_percentage, args.random_seeds[1])
+    original_train, original_val, original_test = create_samples(original, args.train_percentage, args.val_percentage, args.random_seeds[0])
+    target_train, target_val, target_test = create_samples(target, args.train_percentage, args.val_percentage, args.random_seeds[1])
 
     original_8D_train, original_8D_val, original_8D_test = create_samples(original_8D, args.train_percentage, args.val_percentage, args.random_seeds[0])
     target_8D_train, target_8D_val, target_8D_test = create_samples(target_8D, args.train_percentage, args.val_percentage, args.random_seeds[1])
