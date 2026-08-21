@@ -59,7 +59,7 @@ if __name__ == "__main__":
         "W": r"$W$ (GeV/c$^2$)",
         "y": "y",
         "Mode": "Mode",
-        "Mode_v2": "Mode_v2",
+        "Topology": "Topology",
         "cc": "cc",
         "hitnuc": "hitnuc",
         "N_n": r"$N_n$",

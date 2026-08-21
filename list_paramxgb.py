@@ -7,25 +7,25 @@ args.add_argument('--output_dir', type=str, default='hps', help='Directory to sa
 args = args.parse_args()
 
 ############## Original values ###############
-n_estimators_list = [100, 150, 200]
-max_depth_list = [3, 5, 7, 9]
-learning_rate_list = [0.01, 0.05, 0.1, 0.2]
-subsample_list = [1]
-gamma_list = [0, 0.5] #default 0
-min_child_weight_list = [1] #default 1
-lambda_list = [1] #default 1
-alpha_list = [0] #default 0
-early_stopping_rounds_list = [10]
-############## Testing values ###############
-# n_estimators_list = [100]
-# max_depth_list = [3]
-# learning_rate_list = [0.05]
+# n_estimators_list = [100, 150, 200]
+# max_depth_list = [3, 5, 7, 9]
+# learning_rate_list = [0.01, 0.05, 0.1, 0.2]
 # subsample_list = [1]
-# gamma_list = [0] #default 0
+# gamma_list = [0, 0.5] #default 0
 # min_child_weight_list = [1] #default 1
 # lambda_list = [1] #default 1
 # alpha_list = [0] #default 0
 # early_stopping_rounds_list = [10]
+############## Testing values ###############
+n_estimators_list = [100]
+max_depth_list = [3]
+learning_rate_list = [0.05]
+subsample_list = [1]
+gamma_list = [0] #default 0
+min_child_weight_list = [1] #default 1
+lambda_list = [1] #default 1
+alpha_list = [0] #default 0
+early_stopping_rounds_list = [10]
 #############################################
 
 sub_file_template = ""

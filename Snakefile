@@ -10,7 +10,7 @@ DIM = len(config["parameters"]["reweighting"])
 NUMBER_OF_SETS = config["models"]["number_model_hyperparameters_sets"]
 MODELS = config["models"]["model_list"]
 MODES = config["analysis"]["modes"]
-MODES_v2 = config["analysis"]["modes_v2"]
+TOPOLOGIES = config["analysis"]["topologies"]
 RUNS = range(config["swd_bootstrapping"]["runs"])
 
 ORIG_DIR = config["inputs"]["original_dir"]
@@ -22,17 +22,6 @@ TARGET_DIR = config["inputs"]["target_dir"]
 # also contains a .root file under the same relative path in TARGET_DIR.
 # SAMPLES is a list of relative directory paths, e.g. ["FHC/numu/H2O"].
 # ---------------------------------------------------------------------------
-
-def get_samples():
-    original_files = glob.glob(os.path.join(ORIG_DIR, "**/*.root"), recursive=True)
-    seen = set()
-    samples = []
-    for of in original_files:
-        rel = os.path.relpath(os.path.dirname(of), ORIG_DIR)
-        if rel not in seen and glob.glob(os.path.join(TARGET_DIR, rel, "*.root")):
-            seen.add(rel)
-            samples.append(rel)
-    return samples
 
 def get_samples():
     original_files = glob.glob(os.path.join(ORIG_DIR, "**/*.root"), recursive=True)
@@ -106,7 +95,7 @@ rule initialize_analysis:
 
     params:
         modes=MODES,
-        modes_v2=MODES_v2,
+        topologies=TOPOLOGIES,
         original_tree=config["inputs"]["original_tree"],
         target_tree=config["inputs"]["target_tree"],
         # neutrino_PDG=config["analysis"]["neutrino_PDG"],
@@ -142,7 +131,7 @@ rule initialize_analysis:
             --params_8D {params.params_8D} \
             --params_3D {params.params_3D} \
             --modes {params.modes} \
-            --modes_v2 {params.modes_v2} \
+            --topologies {params.topologies} \
             --train_percentage {params.train_percentage} \
             --val_percentage {params.val_percentage} \
             --output_dir_samples_3D {output.samples_dir_3D} \
@@ -270,7 +259,7 @@ rule custom_dim_analysis:
 
     params:
         modes=MODES,
-        modes_v2=MODES_v2,
+        topologies=TOPOLOGIES,
         original_tree=config["inputs"]["original_tree"],
         target_tree=config["inputs"]["target_tree"],
         # neutrino_PDG=config["analysis"]["neutrino_PDG"],
@@ -296,7 +285,7 @@ rule custom_dim_analysis:
             --branches {params.branches} \
             --analysis_params {params.analysis_params} \
             --modes {params.modes} \
-            --modes_v2 {params.modes_v2} \
+            --topologies {params.topologies} \
             --train_percentage {params.train_percentage} \
             --val_percentage {params.val_percentage} \
             --parameters_interest {params.parameters_interest} \

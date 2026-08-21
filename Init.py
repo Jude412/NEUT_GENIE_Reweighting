@@ -25,7 +25,7 @@ if __name__ == "__main__":
     argparser.add_argument("--params_3D", nargs="+", help="List of parameters to use in 3D samples.")
     argparser.add_argument("--modes", type=int, nargs="+", help="Interaction modes to select (e.g. 1 for CCQE).",
                            required=False, default=[1])
-    argparser.add_argument("--modes_v2", type=int, nargs="+", help="Interaction modes v2 to select (e.g. 1 for CC0pi).",
+    argparser.add_argument("--topologies", type=int, nargs="+", help="Interaction topologies to select (e.g. 1 for CC0pi).",
                            required=False, default=[1])
     # argparser.add_argument("--neutrino_PDG", type=int, help="PDG code of the neutrino type to select (e.g. 14 for numu).", 
     #                        required=False, default = 14)
@@ -49,8 +49,8 @@ if __name__ == "__main__":
     Index_8D_params = [args.analysis_params.index(param) for param in args.params_8D]
     Index_3D_params = [args.analysis_params.index(param) for param in args.params_3D]
 
-    original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
-    target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
+    original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
+    target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
 
     original_8D = original[:, Index_8D_params]
     target_8D = target[:, Index_8D_params]

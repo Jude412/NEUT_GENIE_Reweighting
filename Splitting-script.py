@@ -24,7 +24,7 @@ if __name__ == "__main__":
     argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
     argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
     argparser.add_argument("--modes", type=int, nargs="+", required=False, help="Interaction modes to select (e.g. 1 for CCQE).", default=[1] )
-    argparser.add_argument("--modes_v2", type=int, nargs="+", required=False, help="Interaction modes v2 to select (e.g. 1 for CCQE).", default=[1] )
+    argparser.add_argument("--topologies", type=int, nargs="+", required=False, help="Interaction topologies to select (e.g. 1 for CCQE).", default=[1] )
     # argparser.add_argument("--neutrino_PDG", type=int, required=False, help="PDG code of the neutrino type to select (e.g. 14 for numu).", default = 14)
     argparser.add_argument("--train_percentage", type=float, required=False, help="Percentage of the training sample (between 0 and 1).", default=0.4)
     argparser.add_argument("--val_percentage", type=float, required=False, help="Percentage of the validation sample (between 0 and 1).", default=0.4)
@@ -41,8 +41,8 @@ if __name__ == "__main__":
 
     Params_of_interest = args.parameters_interest
 
-    original_load = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
-    target_load = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
+    original_load = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
+    target_load = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
 
     original = original_load[:, [args.analysis_params.index(param) for param in args.parameters_interest]]
     target = target_load[:, [args.analysis_params.index(param) for param in args.parameters_interest]]

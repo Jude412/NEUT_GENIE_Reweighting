@@ -5,7 +5,7 @@ import numpy as np
 import uproot
 import awkward as ak
 
-def convert_input_file(input_file, input_tree, branches, analysis_params, modes = None, modes_v2 = None):
+def convert_input_file(input_file, input_tree, branches, analysis_params, modes = None, topologies = None):
     """This function takes as input a ROOT FlatTree from and returns an array containing all the parameters of interest.
     They are : E_nu, E_lep, cos(theta_lep), Q2, q0, q3, W, Eav, y, neutrino PDG, interaction, mode, charged current,
     hit nucleus atomic number, hit nucleon PDG, multiplicity of final state proton, neutron, pions and the sum of their kinetic energies. """
@@ -94,7 +94,7 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     tree["K_pip"] = ak.sum(tree["E_pip"] - np.sqrt(tree["E_pip"]**2 - tree["P2_pip"]), axis=1)
 
 
-    # we create a modev2 parameters that gathers the modes based on the number of pions in the final state
+    # we create a topology parameter that gathers the modes based on the number of pions in the final state
     # We choose the following mapping : 0 for CC0pi, 1 for CC1pipm, 2 for CC1pi0, 3 for CCNpi, 4 for CCOther, 5 for the rest, 6 for CCgamma, 7 for CCOther_QE
     mask_CC0pi = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] + tree["N_pi0"] == 0) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only nucleons
     mask_CC1pipm = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] == 1) & (tree["N_pi0"] == 0) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only one charged pion and nucleons
@@ -104,30 +104,30 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     # mask_CCOther_QE = (tree["Mode"] == 1) & (~mask_CC0pi) & (~mask_CC1pipm) & (~mask_CC1pi0) & (~mask_CCNpi) & (~mask_CCgamma)
     mask_CCOther = (tree["Mode"] <= 30) & (~mask_CC0pi) & (~mask_CC1pipm) & (~mask_CC1pi0) & (~mask_CCNpi) & (~mask_CCgamma)# & (~mask_CCOther_QE)
     mask_NCInc = (tree["Mode"] > 30)
-    tree["Mode_v2"] = ak.where(mask_CC0pi, 0,
-                        ak.where(mask_CC1pipm, 1,
-                            ak.where(mask_CC1pi0, 2,
-                                ak.where(mask_CCNpi, 3,
-                                    ak.where(mask_CCgamma, 4,
-                                        ak.where(mask_CCOther, 5,
-                                            ak.where(mask_NCInc, 6, 7)
-                                        ))))))
-    
-    
-    # cut the tree to the desired modes_v2 if desired
+    tree["Topology"] = ak.where(mask_CC0pi, 0,
+                                ak.where(mask_CC1pipm, 1,
+                                         ak.where(mask_CC1pi0, 2,
+                                                  ak.where(mask_CCNpi, 3,
+                                                           ak.where(mask_CCgamma, 4,
+                                                                    ak.where(mask_CCOther, 5,
+                                                                             ak.where(mask_NCInc, 6, 7)
+                                                                             ))))))
 
-    if modes_v2 is not None:
+
+    # cut the tree to the desired topology if desired
+
+    if topologies is not None:
         mask = False
-        for m in modes_v2:
-            mask = mask | (tree["Mode_v2"] == m)
+        for m in topologies:
+            mask = mask | (tree["Topology"] == m)
 
         tree = tree[mask]
 
-    if 6 not in modes_v2:
-        print("Warning : the CCgamma mode is not included. If you want to include it, please add 6 to the modes_v2 list.")
+    if 6 not in topologies:
+        print("Warning : the CCgamma mode is not included. If you want to include it, please add 6 to the topologies list.")
 
-    if 7 not in modes_v2:
-        print("Warning : the CCOther_QE mode is not included. If you want to include it, please add 7 to the modes_v2 list.")
+    if 7 not in topologies:
+        print("Warning : the CCOther_QE mode is not included. If you want to include it, please add 7 to the topologies list.")
 
     # we now create the final array containing the parameters of interest
     param_values = []
