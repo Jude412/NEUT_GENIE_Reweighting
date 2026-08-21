@@ -106,6 +106,8 @@ wildcard_constraints:
 MIN_EVENTS_PER_TOPOLOGY = minimum_events(
     config["analysis"]["train_percentage"], config["analysis"]["val_percentage"]
 )
+# The counts of all topologies are gathered in a single per-sample file (no {topology} wildcard),
+# as they are all obtained from one pass over the ROOT files of the sample.
 TOPOLOGY_COUNTS_FILE = f"saved_samples/{TAG}/{{sample}}/topology_counts.json"
 
 def topologies_for_sample(sample):

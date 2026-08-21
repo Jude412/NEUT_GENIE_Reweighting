@@ -4,7 +4,8 @@ saved in the "saved_swd_distribution + --output_dir" directory."""
 
 # Imports 
 from ROOT_file_conv import convert_input_file
-from Sample_creation import create_samples, minimum_events
+from Sample_creation import create_samples
+from split_sizes import minimum_events
 import numpy as np
 import argparse
 import os
