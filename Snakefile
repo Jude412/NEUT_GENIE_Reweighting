@@ -5,7 +5,7 @@ import json
 import os
 import re
 
-from Sample_creation import minimum_events
+from split_sizes import minimum_events
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
@@ -582,4 +582,14 @@ rule all:
         # rather than one sample at a time as the checkpoints get resolved.
         counts_files=expand(TOPOLOGY_COUNTS_FILE, sample=SAMPLES),
         metrics_files=all_metrics_files
-    
+
+# Wildcard-free target running only the topology counting checkpoint on every sample.
+# The 'count_topologies' checkpoint itself carries a {sample} wildcard and so cannot be
+# asked for on the command line; ask for this rule instead:
+#     snakemake count_all_topologies --cores 8
+# Running it first makes the counts available to the checkpoints, so that a subsequent
+# dry run ('snakemake all -n') can resolve them and list every job of the workflow.
+rule count_all_topologies:
+    input:
+        counts_files=expand(TOPOLOGY_COUNTS_FILE, sample=SAMPLES)
+

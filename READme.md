@@ -73,6 +73,16 @@ where {tag} is the tag given in the 'output'/'tag' section, {sample} is the rela
 dimensions given in the 'dimensions'/'dim' section of the 'config.yaml' file.
 Once finished, you can explore the different 'saved' folders containing the samples, models, metrics and plots.
 
+Note on dry runs ('snakemake all -n'): the topology counting is a snakemake checkpoint, which means the jobs
+that depend on it (all the trainings and metrics) can only be listed once the counts exist. A dry run creates no
+file, so it stops at the counting jobs. To see the whole list of jobs, first run the (cheap) counting on every
+sample, then ask for the dry run:
+
+snakemake count_all_topologies --cores 8  (--use-conda  (only if you use conda))
+snakemake all -n
+
+The counting is not repeated afterwards, as its output files are then up to date.
+
 Congrats, you ran your first analysis !
 
 
