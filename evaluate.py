@@ -20,18 +20,18 @@ if __name__ == "__main__":
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_models/6D_mode1_11/6D/XGB_model_6D.pkl')
     argparser.add_argument('--original_test_nD', type=str, required=False, help='Path to the original 6D dataset (containing the desired mode) (csv).',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_mode1_11/6D/original_test.csv')
-    argparser.add_argument('--original_test', type=str, required=False, help='Path to the original dataset with ALL PARAMETERS (containing the desired mode) (csv).',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_mode1_11/21D/original_test.csv')
+    argparser.add_argument('--original_test', type=str, required=False, help='Path to the original dataset with all configured analysis parameters (containing the desired mode) (csv).',
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_mode1_11/all/original_test.csv')
     argparser.add_argument('--target_test_nD', type=str, required=False, help='Path to the target 6D dataset (containing the desired mode) (csv).',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_5andmode_mode_11/6D/target_test.csv')
-    argparser.add_argument('--target_test', type=str, required=False, help='Path to the target dataset with ALL PARAMETERS (containing the desired mode) (csv).',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_5andmode_mode_11/21D/target_test.csv')
+    argparser.add_argument('--target_test', type=str, required=False, help='Path to the target dataset with all configured analysis parameters (containing the desired mode) (csv).',
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/6D_5andmode_mode_11/all/target_test.csv')
     argparser.add_argument('--swd_distribution_target_3D', type=str, required=False, help='Path to the SWD distribution of the target dataset for the 3D case (csv).',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/3D/swd_distribution_3D.npy')
     argparser.add_argument('--swd_distribution_target_8D', type=str, required=False, help='Path to the SWD distribution of the target dataset for the 8D case (csv).',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/8D/swd_distribution_8D.npy')
-    argparser.add_argument('--swd_distribution_target_21D', type=str, required=False, help='Path to the SWD distribution of the target dataset for the 21D case (csv).',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/21D/swd_distribution_21D.npy')
+    argparser.add_argument('--swd_distribution_target_all', '--swd_distribution_target_21D', dest='swd_distribution_target_all', type=str, required=False, help='Path to the SWD distribution of the target dataset for the all-parameters case (csv).',
+                            default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/all/swd_distribution_all.npy')
     argparser.add_argument('--swd_distribution_target_nD', type=str, required=False, help='Path to the SWD distribution of the target dataset (csv).',
                             default='/vols/dune/jmm224/t2knova/reweighting/saved_swd_distribution/6D_5andmode_mode_11/6D/swd_distribution_6D.npy')
     argparser.add_argument('--binning_file', type=str, required=False, help="Path to the json file containing the binning information for each parameter.",
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     swd_distribution_target_3D = np.load(args.swd_distribution_target_3D)
     swd_distribution_target_8D = np.load(args.swd_distribution_target_8D)
     swd_distribution_target_nD = np.load(args.swd_distribution_target_nD)
-    swd_distribution_target_21D = np.load(args.swd_distribution_target_21D)
+    swd_distribution_target_all = np.load(args.swd_distribution_target_all)
 
     # The model predicts weights
     with open(args.original_test_nD) as f:
@@ -89,25 +89,25 @@ if __name__ == "__main__":
     metrics_dict["chi2_3D_dof"] = chi2_3D
     chi2_8D = chi2_dof(original_test[:, :8], target_test[:, :8], weights_dict=weights_dict, binning_dict=binning_dict)
     metrics_dict["chi2_8D_dof"] = chi2_8D
-    chi2_21D = chi2_dof(original_test, target_test, weights_dict=weights_dict, binning_dict=binning_dict)
-    metrics_dict["chi2_21D_dof"] = chi2_21D
+    chi2_all = chi2_dof(original_test, target_test, weights_dict=weights_dict, binning_dict=binning_dict)
+    metrics_dict["chi2_all_dof"] = chi2_all
 
     swd_3D = compute_swd(original_test[:, :3], target_test[:, :3], weights_dict)
     swd_8D = compute_swd(original_test[:, :8], target_test[:, :8], weights_dict)
-    swd_21D = compute_swd(original_test, target_test, weights_dict)
+    swd_all = compute_swd(original_test, target_test, weights_dict)
     swd_nD = compute_swd(original_test_nD, target_test_nD, weights_dict)
     metrics_dict["swd_3D"] = swd_3D
     metrics_dict["swd_8D"] = swd_8D
-    metrics_dict["swd_21D"] = swd_21D
+    metrics_dict["swd_all"] = swd_all
     metrics_dict["swd_nD"] = swd_nD
 
     p_value_3D = compute_p_value(swd_3D, swd_distribution_target_3D)
     p_value_8D = compute_p_value(swd_8D, swd_distribution_target_8D)
-    p_value_21D = compute_p_value(swd_21D, swd_distribution_target_21D)
+    p_value_all = compute_p_value(swd_all, swd_distribution_target_all)
     p_value_nD = compute_p_value(swd_nD, swd_distribution_target_nD)
     p_value_dict["p_value_3D"] = p_value_3D
     p_value_dict["p_value_8D"] = p_value_8D
-    p_value_dict["p_value_21D"] = p_value_21D
+    p_value_dict["p_value_all"] = p_value_all
     p_value_dict["p_value_nD"] = p_value_nD
 
     metrics_dict["p_values"] = p_value_dict
