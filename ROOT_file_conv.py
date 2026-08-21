@@ -23,9 +23,10 @@ def topology_code(topology):
     if isinstance(topology, str):
         if topology in TOPOLOGY_CODES:
             return TOPOLOGY_CODES[topology]
-        if not topology.isdigit():
+        try:
+            topology = int(topology)
+        except ValueError:
             raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
-        topology = int(topology)
     if topology not in TOPOLOGY_CODES.values():
         raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
     return int(topology)
