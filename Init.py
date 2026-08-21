@@ -52,6 +52,14 @@ if __name__ == "__main__":
     original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
     target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
 
+    for name, dataset in (("original", original), ("target", target)):
+        if len(dataset) < 2:
+            raise ValueError(
+                f"The {name} distribution holds {len(dataset)} event(s) for the topologies {args.topologies}. "
+                "At least 2 events are needed to build the training, validation and test samples. "
+                "Such sparse topologies are skipped automatically when running the whole workflow."
+            )
+
     original_8D = original[:, Index_8D_params]
     target_8D = target[:, Index_8D_params]
 

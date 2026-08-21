@@ -91,6 +91,76 @@ wildcard_constraints:
     sample="[^.]+",
     topology="|".join(re.escape(str(t)) for t in TOPOLOGIES)
 
+# ---------------------------------------------------------------------------
+# Topology filtering
+# A topology holding a single event (or none) cannot be split into training,
+# validation and test samples, so it is skipped for the sample it is empty in.
+# The same topology is still trained on in the samples where it is filled.
+# ---------------------------------------------------------------------------
+
+MIN_EVENTS_PER_TOPOLOGY = 2
+TOPOLOGY_COUNTS_FILE = f"saved_samples/{TAG}/{{sample}}/topology_counts.json"
+
+def topologies_for_sample(sample):
+    """Return the topologies of the config file that hold enough events in a given sample."""
+    with open(checkpoints.count_topologies.get(sample=sample).output.counts_file) as f:
+        counts = json.load(f)
+
+    kept = []
+    for topology in TOPOLOGIES:
+        n_original = counts["original"][str(topology)]
+        n_target = counts["target"][str(topology)]
+        if n_original < MIN_EVENTS_PER_TOPOLOGY or n_target < MIN_EVENTS_PER_TOPOLOGY:
+            print(
+                f"Warning: topology {topology} of sample {sample} holds {n_original} original event(s) "
+                f"and {n_target} target event(s). Topologies with less than {MIN_EVENTS_PER_TOPOLOGY} "
+                "events in either the original or the target sample cannot be split into training, "
+                "validation and test samples: no training will be carried out for this topology in this sample."
+            )
+            continue
+        kept.append(topology)
+
+    return kept
+
+def all_metrics_files(wildcards):
+    return [
+        f"saved_figures/{TAG}/{sample}/{topology}/custom_{DIM}D/metrics.json"
+        for sample in SAMPLES
+        for topology in topologies_for_sample(sample)
+    ]
+
+
+checkpoint count_topologies:
+    input:
+        original_file=original_file_for,
+        target_file=target_file_for
+
+    params:
+        modes=MODES,
+        topologies=TOPOLOGIES,
+        original_tree=config["inputs"]["original_tree"],
+        target_tree=config["inputs"]["target_tree"],
+        branches=config["inputs"]["branches"]
+
+    output:
+        counts_file=TOPOLOGY_COUNTS_FILE
+
+    conda:
+        ENV
+
+    shell:
+        """
+        python count_topologies.py \
+            --input_file_original {input.original_file} \
+            --input_file_target {input.target_file} \
+            --input_tree_original {params.original_tree} \
+            --input_tree_target {params.target_tree} \
+            --branches {params.branches} \
+            --modes {params.modes} \
+            --topologies {params.topologies} \
+            --output_file {output.counts_file}
+        """
+
 
 rule initialize_analysis:
     input:
@@ -501,9 +571,8 @@ rule compute_metrics_plots:
 
 rule all:
     input:
-        expand(
-            f"saved_figures/{TAG}/{{sample}}/{{topology}}/custom_{DIM}D/metrics.json",
-            sample=SAMPLES,
-            topology=TOPOLOGIES
-        )
+        # The counts are requested explicitly so that every sample is scanned in one go,
+        # rather than one sample at a time as the checkpoints get resolved.
+        counts_files=expand(TOPOLOGY_COUNTS_FILE, sample=SAMPLES),
+        metrics_files=all_metrics_files
     
