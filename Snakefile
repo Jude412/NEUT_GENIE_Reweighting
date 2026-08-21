@@ -3,6 +3,7 @@ configfile: "config.yaml"
 import glob
 import json
 import os
+import re
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
@@ -88,7 +89,7 @@ for model in MODELS:
 # which also removes the ambiguity with the (slash-containing) sample wildcard.
 wildcard_constraints:
     sample="[^.]+",
-    topology="|".join(str(t) for t in TOPOLOGIES)
+    topology="|".join(re.escape(str(t)) for t in TOPOLOGIES)
 
 
 rule initialize_analysis:
