@@ -47,7 +47,7 @@ if __name__ == "__main__":
 
         if model == "XGB":
             df = pd.read_csv(os.path.join(input_dir, f"{model}/Hyperparameters_metrics.csv"))
-            best_set = df.loc[df['p_value_6D'].idxmax()]
+            best_set = df.loc[df['p_value_8D'].idxmax()]
             model_best_set_hyperparameters[model] = {
                 "n_estimators" : int(best_set['n_estimators']),
                  "gamma" : float(best_set['gamma']),

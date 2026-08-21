@@ -30,15 +30,16 @@ if __name__ == "__main__":
     args.add_argument("--swd_distribution_3D", type = str, help = "The distribution to compute the 3D SWD p-value for.")
     args.add_argument("--swd_distribution_8D", type = str, help = "The distribution to compute the 8D SWD p-value for.")
     args.add_argument("--swd_distribution_21D", type = str, help = "The distribution to compute the 21D SWD p-value for.")
+    args.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
+    args.add_argument("--params_8D", nargs="+", help="List of parameters to use in 8D samples.")
+    args.add_argument("--params_3D", nargs="+", help="List of parameters to use in 3D samples.")
     args.add_argument("--params_interest", nargs='+', help="List of parameter names used in the training.")
     args.add_argument('--n_directions', type=int, default=500, help="Number of directions to draw for each bootstrap")
     args.add_argument("--binning_file", type=str, help="Path to the json file containing the binning information for each parameter.")
     args.add_argument("--output_file", type = str, help = "The path to the csv file where the hyperparameters and metrics will be saved in addition to the tensorboard log file.")
     args = args.parse_args()
-    List_parameters = ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav",]
-    List_parameters_21D = ["Enu_true", "Plep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav", "W", "y", "Mode", "Mode_v2",
-                "cc", "hitnuc", "N_n", "K_n", "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
-    Index_params_interest = [List_parameters_21D.index(param) for param in args.params_interest]
+
+    Index_params_interest = [args.analysis_params.index(param) for param in args.params_interest]
     # Load the data
 
     original_train = np.loadtxt(os.path.join(args.train_sample_dir, "original_train.csv"), delimiter=',')
@@ -195,21 +196,21 @@ if __name__ == "__main__":
         binning_dict = json.load(f)
 
     for i in range(original_test_21D.shape[1]):
-        if List_parameters_21D[i] in binning_dict:
-            x_min = binning_dict[List_parameters_21D[i]]["x_min"]
-            x_max = binning_dict[List_parameters_21D[i]]["x_max"]
-            n_bins = binning_dict[List_parameters_21D[i]]["n_bins"]
+        if args.analysis_params[i] in binning_dict:
+            x_min = binning_dict[args.analysis_params[i]]["x_min"]
+            x_max = binning_dict[args.analysis_params[i]]["x_max"]
+            n_bins = binning_dict[args.analysis_params[i]]["n_bins"]
         else:
             x_min = None
             x_max = None
             n_bins = 30
         chi2, dof = chi2_hist_axis(original_test_21D, target_test_21D, weight_dict[args.model], axis_number = i, n_bins=n_bins, x_min = x_min, x_max = x_max)
-        metrics[f"chi2_dof_{List_parameters_21D[i]}"] = chi2/dof if dof > 0 else 0
+        metrics[f"chi2_dof_{args.analysis_params[i]}"] = chi2/dof if dof > 0 else 0
 
-    metrics[f"chi2_dof_3D"] = chi2_dof(original_test_3D, target_test_3D, weight_dict, binning_dict=binning_dict, List_param_interest = List_parameters_21D[:3])[args.model]
-    metrics[f"chi2_dof_8D"] = chi2_dof(original_test_8D, target_test_8D, weight_dict, binning_dict=binning_dict, List_param_interest = List_parameters_21D[:8])[args.model]
-    metrics[f"chi2_dof_21D"] = chi2_dof(original_test_21D, target_test_21D, weight_dict, binning_dict=binning_dict, List_param_interest = List_parameters_21D)[args.model]
-    metrics[f"chi2_dof_{original_test.shape[1]}D"] = chi2_dof(original_test, target_test, weight_dict, binning_dict=binning_dict, List_param_interest = [List_parameters_21D[i] for i in Index_params_interest])[args.model]
+    metrics[f"chi2_dof_3D"] = chi2_dof(original_test_3D, target_test_3D, weight_dict, binning_dict=binning_dict, List_param_interest = args.params_3D)[args.model]
+    metrics[f"chi2_dof_8D"] = chi2_dof(original_test_8D, target_test_8D, weight_dict, binning_dict=binning_dict, List_param_interest = args.params_8D)[args.model]
+    metrics[f"chi2_dof_21D"] = chi2_dof(original_test_21D, target_test_21D, weight_dict, binning_dict=binning_dict, List_param_interest = args.analysis_params)[args.model]
+    metrics[f"chi2_dof_{original_test.shape[1]}D"] = chi2_dof(original_test, target_test, weight_dict, binning_dict=binning_dict, List_param_interest = [args.analysis_params[i] for i in Index_params_interest])[args.model]
 
     print(f"p_value_3D : {p_value_3D}")
     print(f"p_value_8D : {p_value_8D}")
