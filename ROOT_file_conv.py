@@ -12,10 +12,13 @@ TOPOLOGY_CODES = {
     "CC1pipm": 1,
     "CC1pi0": 2,
     "CCNpi": 3,
-    "CCgamma": 4,
-    "CCOther": 5,
-    "NCInc": 6,
-    "rest": 7,
+    "CCOther": 4,
+    "NC0pi": 5,
+    "NC1pipm": 6,
+    "NC1pi0": 7,
+    "NCNpi": 8,
+    "NCOther": 9,
+    "Other": 10,
 }
 
 def topology_code(topology):
@@ -42,40 +45,6 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     tree["W"] = tree["W_nuc_rest"]
     # For dealing with modes, we use absolute value to allow common treatment of neutrinos and antineutrinos. No ambiguity arises because separate BDTs are trained for neutrinos and antineutrinos.
     tree["Mode"] = abs(tree["Mode"])
-
-    # weird_modes = [11, 12, 13, 17, 31, 32, 33, 34, 38, 39]
-    # if modes is None:
-    #     modes = np.unique(tree["Mode"])
-    # if bool(set(modes) & set(weird_modes)):
-    #     print("Warning there are undefined (-999) values in some events for the Q2, q0 and q3 parameters in the modes you are trying to extract." \
-    #     "We removed such events from the tree, but be careful.")
-    #     weird_mask = (tree["Q2"] <= -1) | (tree["q0"] <= -1) | (tree["q3"] <= -1) | (tree["Eav"] <= -1) | (tree["W"] <= -1)
-    #     tree = tree[~weird_mask]
-
-    # we now compute the parameters of interest
-    # PLep and PTlep are computed from px py pz using the first lepton in the final state (in pdg branch)
-    tree["PTlep"] = tree["PLep"]*np.sqrt(1 - (tree["CosLep"]**2))
-
-
-    # Note that the Hank-generated files have no pdg_vert branch, so the following fields can't be created. 
-    # This is fine as we will be using a separate BDT per nucleus
-
-    # # A (this may change, since there might be different nuclei in the same file later on)
-    # coherent_mask = tree["Mode"] == 16
-    # A_value_string = np.unique(tree[coherent_mask]["pdg_vert"][:, 1])[0] # format : 10LZZZAAAI
-    # A_value = int(str(A_value_string)[3:6])
-    # tree["A"] = A_value
-    # # hitnucleon
-    # coherent_like_mask = ((tree["Mode"] == 16) | (tree["Mode"] == 36) | (tree["Mode"] == 2) | (tree["Mode"] == 32))
-    # tree["hitnuc"] = ak.where(
-    #     coherent_like_mask,
-    #     -999,
-    #     ak.where(tree["pdg_vert"][:, 1] == 1000080160,
-    #              tree["pdg_vert"][:, 2],
-    #          tree["pdg_vert"][:, 1])
-    #             )
-
-
     # cut the tree to the desired modes if specified
     if modes is not None:
         mask = False
@@ -83,6 +52,10 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
             mask = mask | (tree["Mode"] == m)
 
         tree = tree[mask]
+
+    # we now compute the parameters of interest
+    # PLep and PTlep are computed from px py pz using the first lepton in the final state (in pdg branch)
+    tree["PTlep"] = tree["PLep"]*np.sqrt(1 - (tree["CosLep"]**2))
 
     # multiplicity and sum of kinetic energies of final state protons, neutrons and pions
     pdg = tree["pdg"]
@@ -97,8 +70,8 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     tree["N_pi0"] = ak.sum(pdg == 111, axis=1)
     tree["N_pim"] = ak.sum(pdg == -211, axis=1)
     tree["N_pip"] = ak.sum(pdg == 211, axis=1)
-    tree["N_gamma"] = ak.sum((pdg == 22) & (E>10e-3), axis=1) # If photon energy less than 10 MeV, call it a de-excitation and don't count towards the multiplicity
-    tree["N_other"] = ak.sum((pdg != 2112) & (pdg != 2212) & (pdg != 111) & (pdg != 211) & (pdg != -211) & (pdg != 22), axis=1) - 1 # -1 to remove prim lepton
+    tree["N_gamma"] = ak.sum((pdg == 22), axis=1)
+    tree["N_other"] = ak.sum((pdg != 2112) & (pdg != 2212) & (pdg != 111) & (pdg != 211) & (pdg != -211) & (pdg != 22) & (pdg < 1000000000), axis=1) - 1 # -1 to remove prim lepton
 
     #Sum of kinetic energy
     tree["E_N"]   = E * (pdg == 2112)
@@ -118,37 +91,44 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     tree["K_pi0"] = ak.sum(tree["E_pi0"] - np.sqrt(tree["E_pi0"]**2 - tree["P2_pi0"]), axis=1) 
     tree["K_pim"] = ak.sum(tree["E_pim"] - np.sqrt(tree["E_pim"]**2 - tree["P2_pim"]), axis=1)
     tree["K_pip"] = ak.sum(tree["E_pip"] - np.sqrt(tree["E_pip"]**2 - tree["P2_pip"]), axis=1)
+    tree["E_gamma"] = ak.sum(E * (pdg == 22), axis=1)
 
 
     # we create a topology parameter that gathers the modes based on the number of pions in the final state
-    # We choose the following mapping : 0 for CC0pi, 1 for CC1pipm, 2 for CC1pi0, 3 for CCNpi, 4 for CCgamma, 5 for CCOther, 6 for NCInc, 7 for rest
-    mask_CC0pi = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] + tree["N_pi0"] == 0) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only nucleons
-    mask_CC1pipm = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] == 1) & (tree["N_pi0"] == 0) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only one charged pion and nucleons
-    mask_CC1pi0 = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] == 0) & (tree["N_pi0"] == 1) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, only one neutral pion and nucleons
-    mask_CCNpi = (tree["Mode"] <= 30) & (tree["N_pip"] + tree["N_pim"] + tree["N_pi0"] >= 2) & (tree["N_gamma"] == 0) & (tree["N_other"] == 0) # CC, at least 2 pions and nucleons (nothing else)
-    mask_CCgamma = (tree["Mode"] <= 30) & (tree["N_gamma"] >= 1)
-    # mask_CCOther_QE = (tree["Mode"] == 1) & (~mask_CC0pi) & (~mask_CC1pipm) & (~mask_CC1pi0) & (~mask_CCNpi) & (~mask_CCgamma)
-    mask_CCOther = (tree["Mode"] <= 30) & (~mask_CC0pi) & (~mask_CC1pipm) & (~mask_CC1pi0) & (~mask_CCNpi) & (~mask_CCgamma)# & (~mask_CCOther_QE)
-    mask_NCInc = (tree["Mode"] > 30)
-    tree["Topology"] = ak.where(mask_CC0pi, 0,
-                                ak.where(mask_CC1pipm, 1,
-                                         ak.where(mask_CC1pi0, 2,
-                                                  ak.where(mask_CCNpi, 3,
-                                                           ak.where(mask_CCgamma, 4,
-                                                                    ak.where(mask_CCOther, 5,
-                                                                             ak.where(mask_NCInc, 6, 7)
-                                                                             ))))))
 
+    # Previous analysis omitted photons above 10 MeV from _C_pi topologies, but this leads to big disparity in _COther. Now we allow events with photons
+    # gamma_deexcite_cut = 10e-3 # If E_gamma < 10 MeV, we consider it a de-excitation photon and don't count it towards the multiplicity
+    # clean = (tree["E_gamma"] < gamma_deexcite_cut) & (tree["N_other"] == 0)  # no photons/other particles
 
-    # cut the tree to the desired topology if desired
-    # Topologies can be given either by name (ex: "CC1pipm") or by code (ex: 1).
+    clean = (tree["N_other"] == 0)  # nothing but prim lep, nucleons, pions, and photons in final state
+    is_cc = tree["cc"]
+    n_pi_charged = tree["N_pip"] + tree["N_pim"]
+    n_pi_total = n_pi_charged + tree["N_pi0"]
 
-    if topologies is not None:
-        mask = False
-        for m in topologies:
-            mask = mask | (tree["Topology"] == topology_code(m))
+    topology_masks = {}
+    for sign, cc_mask in [("CC", is_cc), ("NC", ~is_cc)]:
+        topology_masks[f"{sign}0pi"]   = cc_mask & (n_pi_total == 0) & clean
+        topology_masks[f"{sign}1pipm"] = cc_mask & (n_pi_charged == 1) & (tree["N_pi0"] == 0) & clean
+        topology_masks[f"{sign}1pi0"]  = cc_mask & (n_pi_charged == 0) & (tree["N_pi0"] == 1) & clean
+        topology_masks[f"{sign}Npi"]   = cc_mask & (n_pi_total >= 2) & clean
+        # "Other" = everything else in this CC/NC branch (including non-clean final states)
+        specific = (
+            topology_masks[f"{sign}0pi"] | topology_masks[f"{sign}1pipm"]
+            | topology_masks[f"{sign}1pi0"] | topology_masks[f"{sign}Npi"]
+        )
+        topology_masks[f"{sign}Other"] = cc_mask & ~specific
 
-        tree = tree[mask]
+    # sanity check: every event should match exactly one topology
+    mask_sum = ak.sum([ak.values_astype(m, np.int64) for m in topology_masks.values()], axis=0)
+    assert ak.all(mask_sum == 1), (
+        f"Topology masks are not mutually exclusive/exhaustive: "
+        f"{ak.sum(mask_sum == 0)} events matched none, "
+        f"{ak.sum(mask_sum > 1)} events matched multiple."
+    )
+
+    tree["Topology"] = ak.full_like(tree["Mode"], topology_code("Other"), dtype=np.int64)  # sensible default
+    for top in topology_masks.keys():
+        tree["Topology"] = ak.where(topology_masks[top], topology_code(top), tree["Topology"])
 
     # we now create the final array containing the parameters of interest
     param_values = []

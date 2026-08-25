@@ -41,13 +41,16 @@ analysis:
 
   topologies:
     - CC0pi
-    # - CC1pipm
-    # - CC1pi0
-    # - CCNpi
-    # - CCgamma
-    # - CCOther
-    # - NCInc
-    # - rest
+    - CC1pipm
+    - CC1pi0
+    - CCNpi
+    - CCOther
+    - NC0pi
+    - NC1pipm
+    - NC1pi0
+    - NCNpi
+    - NCOther
+    - Other
 
   #choose in CC0pi, CC1pipm, CC1pi0, CCNpi, CCgamma, CCOther, NCInc and rest (rest should be empty)
   #a separate training is run for each listed topology
@@ -88,8 +91,8 @@ models:
     binning: 24
     NN: 240
     GBR: 270
-    XGB : 1
-    # XGB : 96
+    # XGB : 1
+    XGB : 96
     
 
 dimensions:
@@ -97,10 +100,10 @@ dimensions:
   # In case of 3 or 8 dimensions, add an extra string (ex: "_custom") to dim, to rule out the degeneracy with the regular 3D and 8D cases (always computed for metrics).
 
 swd_bootstrapping:
-  runs: 100
-  n_directions: 100
-  # runs: 200
-  # n_directions: 500
+  # runs: 100
+  # n_directions: 100
+  runs: 200
+  n_directions: 500
 
 output:
-  tag: "testing_topology_0"
+  tag: "testing_topology_2"
