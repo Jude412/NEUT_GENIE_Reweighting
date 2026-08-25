@@ -6,8 +6,10 @@ args = argparse.ArgumentParser(description='Generate json files for each binning
 args.add_argument('--output_dir', type=str, default='hps', help='Directory to save the json files.')
 args = args.parse_args()
 
-n_bins = [5, 6, 7, 8, 9, 10, 11, 12]
-n_neighs = [0, 1, 2]
+# n_bins = [5, 6, 7, 8, 9, 10, 11, 12]
+# n_neighs = [0, 1, 2]
+n_bins = [5]
+n_neighs = [1]
 
 sub_file_template = ""
 

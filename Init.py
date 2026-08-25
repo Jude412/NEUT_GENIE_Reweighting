@@ -93,7 +93,7 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(args.output_dir_samples_8D), exist_ok=True)
     os.makedirs(os.path.join(args.output_dir_samples_all), exist_ok=True)
 
-save_sample(os.path.join(args.output_dir_samples_all, "original_train.csv"), original_train, original_train_w, args.analysis_params)
+    save_sample(os.path.join(args.output_dir_samples_all, "original_train.csv"), original_train, original_train_w, args.analysis_params)
     save_sample(os.path.join(args.output_dir_samples_all, "original_val.csv"), original_val, original_val_w, args.analysis_params)
     save_sample(os.path.join(args.output_dir_samples_all, "original_test.csv"), original_test, original_test_w, args.analysis_params)
     save_sample(os.path.join(args.output_dir_samples_all, "target_train.csv"), target_train, target_train_w, args.analysis_params)

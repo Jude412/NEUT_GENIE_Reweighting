@@ -50,7 +50,7 @@ analysis:
     - NC1pi0
     - NCNpi
     - NCOther
-    - Other
+    # - Other
 
   #choose in CC0pi, CC1pipm, CC1pi0, CCNpi, CCgamma, CCOther, NCInc and rest (rest should be empty)
   #a separate training is run for each listed topology
@@ -81,18 +81,15 @@ parameters:
 
 models:
   model_list:
-    # - binning
-    # - NN
-    # - GBR
+    - binning
     - XGB
-  # choose from binning, NN, GBR (HEP_ML) and XGB (XGBoost)
+  # choose from binning and XGB (XGBoost)
   
   number_model_hyperparameters_sets:
-    binning: 24
-    NN: 240
-    GBR: 270
-    # XGB : 1
-    XGB : 96
+    # binning: 24
+    binning: 1
+    XGB : 1
+    # XGB : 96
     
 
 dimensions:
@@ -106,4 +103,4 @@ swd_bootstrapping:
   n_directions: 500
 
 output:
-  tag: "testing_topology_2"
+  tag: "testing_preweights"
