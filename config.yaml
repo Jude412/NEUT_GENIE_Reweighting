@@ -6,7 +6,7 @@ inputs:
   target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test"
   target_tree: "T2KNOvATruthTree"
   # All branches read for calculation of analysis parameters
-  branches: ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep"]
+  branches: ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep", "fScaleFactor", "RWWeight"]
 
 analysis:
   modes: 
