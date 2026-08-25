@@ -7,8 +7,8 @@ They are saved as csv files in a specified directory. The script can be run from
 #imports 
 from ROOT_file_conv import convert_input_file
 from Sample_creation import create_samples
+from Sample_io import save_sample
 from split_sizes import minimum_events
-import numpy as np
 import argparse
 import os
 
@@ -42,8 +42,8 @@ if __name__ == "__main__":
 
     Params_of_interest = args.parameters_interest
 
-    original_load = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
-    target_load = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
+    original_load, original_weights = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
+    target_load, target_weights = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
 
     min_events = minimum_events(args.train_percentage, args.val_percentage)
     for name, dataset in (("original", original_load), ("target", target_load)):
@@ -60,16 +60,17 @@ if __name__ == "__main__":
     target = target_load[:, [args.analysis_params.index(param) for param in args.parameters_interest]]
 
     # We split the data into a training and validation set
+    # The weights follow their events, so that every sample holds the weights of the events it contains.
     print("Splitting data into training, validation and test samples...")
-    original_train, original_val, original_test = create_samples(original, args.train_percentage, args.val_percentage, args.random_seeds[0])
-    target_train, target_val, target_test = create_samples(target, args.train_percentage, args.val_percentage, args.random_seeds[1])
+    original_train, original_val, original_test, original_train_w, original_val_w, original_test_w = create_samples(original, args.train_percentage, args.val_percentage, args.random_seeds[0], weights=original_weights)
+    target_train, target_val, target_test, target_train_w, target_val_w, target_test_w = create_samples(target, args.train_percentage, args.val_percentage, args.random_seeds[1], weights=target_weights)
 
     # We save the splitted samples as csv files
     os.makedirs(args.samples_dir, exist_ok=True)
-    np.savetxt(os.path.join(args.samples_dir, "original_train.csv"), original_train, delimiter=",", header=",".join(args.parameters_interest))
-    np.savetxt(os.path.join(args.samples_dir, "original_val.csv"), original_val, delimiter=",", header=",".join(args.parameters_interest))
-    np.savetxt(os.path.join(args.samples_dir, "original_test.csv"), original_test, delimiter=",", header=",".join(args.parameters_interest))
-    np.savetxt(os.path.join(args.samples_dir, "target_train.csv"), target_train, delimiter=",", header=",".join(args.parameters_interest))
-    np.savetxt(os.path.join(args.samples_dir, "target_val.csv"), target_val, delimiter=",", header=",".join(args.parameters_interest))
-    np.savetxt(os.path.join(args.samples_dir, "target_test.csv"), target_test, delimiter=",", header=",".join(args.parameters_interest))
+    save_sample(os.path.join(args.samples_dir, "original_train.csv"), original_train, original_train_w, args.parameters_interest)
+    save_sample(os.path.join(args.samples_dir, "original_val.csv"), original_val, original_val_w, args.parameters_interest)
+    save_sample(os.path.join(args.samples_dir, "original_test.csv"), original_test, original_test_w, args.parameters_interest)
+    save_sample(os.path.join(args.samples_dir, "target_train.csv"), target_train, target_train_w, args.parameters_interest)
+    save_sample(os.path.join(args.samples_dir, "target_val.csv"), target_val, target_val_w, args.parameters_interest)
+    save_sample(os.path.join(args.samples_dir, "target_test.csv"), target_test, target_test_w, args.parameters_interest)
 

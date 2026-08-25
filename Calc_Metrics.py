@@ -7,6 +7,7 @@ We are here trying to implement it with n-dimensional distributions, for which w
 import os
 
 from Metrics_ndim import chi2_hist_axis, plot_histograms, plot_2D_histogram, chi2_dof, compute_swd, compute_p_value, chi2_p_value
+from Sample_io import load_sample
 import numpy as np
 import argparse
 import json
@@ -77,17 +78,18 @@ if __name__ == "__main__":
     Index_parameters = [args.analysis_params.index(param) for param in args.interest_params]
 
     # We load the data and the weights
-    original_test = np.loadtxt(args.original_test, delimiter=",")
-    target_test = np.loadtxt(args.target_test, delimiter=",")
+    original_test, original_test_weight = load_sample(args.original_test)
+    target_test, target_test_weight = load_sample(args.target_test)
 
     with open(args.weights_paths, 'r') as f:
         weights_path_dict = json.load(f)
     
     weights_dict = {}
     for method, path in weights_path_dict.items():
-        weights_dict[method] = np.loadtxt(path, delimiter=",")
+        # trained weights are from weighted original to weighted target, so we need to multiply by the original weights
+        weights_dict[method] = np.loadtxt(path, delimiter=",")*original_test_weight
     
-    weights_dict['Original'] = np.ones(len(original_test))/len(original_test)
+    weights_dict['Original'] = original_test_weight
     
     # Make the plots
 
@@ -97,16 +99,19 @@ if __name__ == "__main__":
     if args.make_1D_plots:
         plot_histograms(original_test, target_test, weights_dict,
                         dict_binning=binning_dict,
+                        original_weights = original_test_weight,
+                        target_weights = target_test_weight,
                         xlabels = [parameter_labels[param] for param in args.analysis_params],
                         variables = args.analysis_params, 
                         output_file=os.path.join(args.output_file, "1Dhist.pdf"))
     
     if args.make_2D_plots:
-        plot_2D_histogram(original_test, target_test, weights_dict, 
-                        xlabels = args.interest_params,
-                        nbins = 30, 
-                        pull = True,
-                        output_file=os.path.join(args.output_file, "2Dhist.pdf"))
+        plot_2D_histogram(original_test, target_test, weights_dict,
+                          target_weights = target_test_weight,
+                          xlabels = args.interest_params,
+                          nbins = 30, 
+                          pull = True,
+                          output_file=os.path.join(args.output_file, "2Dhist.pdf"))
     
     # Compute the metrics
     idx_3d = [args.analysis_params.index(param) for param in args.params_3D]
@@ -114,39 +119,66 @@ if __name__ == "__main__":
         
     if args.compute_chi2:
         chi2_dict = {}
+
         for key in weights_dict.keys():
             chi2_dim = {}
+
             for param in args.analysis_params:
                 param_index = args.analysis_params.index(param)
+
                 if param in binning_dict.keys():
                     x_min, x_max = binning_dict[param]["x_min"], binning_dict[param]["x_max"]
                     n_bins = binning_dict[param]["n_bins"]
                 else:
                     x_min, x_max = None, None
                     n_bins = 30
-                chi2_val, dof = chi2_hist_axis(original_test, target_test, weights_dict[key], param_index, n_bins=n_bins, x_min=x_min, x_max=x_max)  
+
+                chi2_val, dof = chi2_hist_axis(original_test, target_test, weights_dict[key],
+                                               target_weights=target_test_weight,
+                                               param_index, n_bins=n_bins, x_min=x_min, x_max=x_max)  
                 chi2_dim[param] = chi2_val/dof if dof > 0 else 0
                 chi2_dim[param+"_p_value"] = chi2_p_value(chi2_val, dof)
+
             chi2_dict[key] = chi2_dim
 
-        chi2_3D_dict = chi2_dof(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_3D)
-        chi2_3D_p_values = {key: chi2_p_value(chi2*87, 87) for key, chi2 in chi2_3D_dict.items()}
-        chi2_8D_dict = chi2_dof(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict, binning_dict=binning_dict, List_param_interest = args.params_8D)
-        chi2_all_dict = chi2_dof(original_test, target_test, weights_dict, binning_dict=binning_dict, List_param_interest = args.analysis_params)
+        dof_3D = 0
+        for param in args.params_3D:
+            if param in binning_dict.keys():
+                n_bins = binning_dict[param]["n_bins"]
+            else:
+                n_bins = 30
+            dof_3D += n_bins - 1
+
+        chi2_3D_dict = chi2_dof(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict,
+                                target_weights=target_test_weight,
+                                binning_dict=binning_dict, List_param_interest = args.params_3D)
+        chi2_3D_p_values = {key: chi2_p_value(chi2*dof_3D, dof_3D) for key, chi2 in chi2_3D_dict.items()}
+        chi2_8D_dict = chi2_dof(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict,
+                                target_weights=target_test_weight,
+                                binning_dict=binning_dict, List_param_interest = args.params_8D)
+        chi2_all_dict = chi2_dof(original_test, target_test, weights_dict,
+                                 target_weights=target_test_weight,
+                                 binning_dict=binning_dict, List_param_interest = args.analysis_params)
 
 
     if args.compute_swd:
         if args.custom_swd_distribution is not None:
             swd_custom_list = np.load(args.custom_swd_distribution)
-            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters], weights_dict, n_directions=args.n_directions)
+            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters],
+                                          weights_dict, target_weights=target_test_weight, 
+                                          n_directions=args.n_directions)
             p_value_dict_custom = compute_p_value(swd_dict_custom, swd_custom_list)
 
         swd_list_3D = np.load(args.swd_distribution_3D)
         swd_list_8D = np.load(args.swd_distribution_8D)
         swd_list_all = np.load(args.swd_distribution_all)
-        swd_dict_3D = compute_swd(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict, n_directions=args.n_directions)
-        swd_dict_8D = compute_swd(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict, n_directions=args.n_directions)
-        swd_dict_all = compute_swd(original_test, target_test, weights_dict, n_directions=args.n_directions)
+
+        swd_dict_3D = compute_swd(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict,
+                                  target_weights=target_test_weight, n_directions=args.n_directions)
+        swd_dict_8D = compute_swd(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict,
+                                  target_weights=target_test_weight, n_directions=args.n_directions)
+        swd_dict_all = compute_swd(original_test, target_test, weights_dict,
+                                   target_weights=target_test_weight, n_directions=args.n_directions)
 
         p_value_dict_3D = compute_p_value(swd_dict_3D, swd_list_3D)
         p_value_dict_8D = compute_p_value(swd_dict_8D, swd_list_8D)
@@ -161,6 +193,7 @@ if __name__ == "__main__":
         metrics_dict['chi2_3D_p_value'] = chi2_3D_p_values
         metrics_dict['chi2_8D'] = chi2_8D_dict
         metrics_dict['chi2_all'] = chi2_all_dict
+
     if args.compute_swd:
         if args.custom_swd_distribution is not None:
             metrics_dict['swd_custom'] = swd_dict_custom
@@ -176,19 +209,6 @@ if __name__ == "__main__":
         json.dump(metrics_dict, f, indent=0)
 
     # Plot the training history if possible
-
-    if "NN" in weights_path_dict.keys():
-        training_history = np.loadtxt(weights_path_dict["NN"].replace("saved_weights", "saved_models").replace("Training_4D", "4D").replace("weights_test", "training_history"), delimiter=',')
-        with PdfPages(os.path.join(args.output_file, "NN_training_history.pdf")) as pdf:
-            plt.plot(training_history[:len(training_history)//2], label='Training Loss')
-            plt.plot(training_history[len(training_history)//2:], label='Validation Loss')
-            plt.xlabel('Epoch')
-            plt.ylabel('Loss')
-            plt.title(f'Training History for NN {len(Index_parameters)}D training')
-            plt.legend()
-            pdf.savefig()
-            plt.close()
-
     if "XGB" in weights_path_dict.keys():
         model_path = weights_path_dict["XGB"].replace("saved_weights", "saved_models").replace("Training_4D", "4D").replace("weights_test", "model").replace("csv", "pkl")
         model = pickle.load(open(model_path, "rb"))

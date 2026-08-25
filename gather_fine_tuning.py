@@ -23,29 +23,7 @@ if __name__ == "__main__":
                 "n_bins" : int(best_set['n_bins']),
                 "n_neighs" : int(best_set['n_neighs'])
             }
-        if model == "NN":
-            df = pd.read_csv(os.path.join(input_dir, f"{model}/Hyperparameters_metrics.csv"))
-            best_set = df.loc[df['p_value_3D'].idxmax()]
-            model_best_set_hyperparameters[model] = {
-                "n_layers" : int(best_set['n_layers']),
-                "n_neurons" : int(best_set['n_neurons']),
-                "epochs" : int(best_set['epochs']),
-                "batch_size" : int(best_set['batch_size']),
-                "activation_function" : best_set['activation_function']
-            }
-        
-        if model == "GBR":
-            df = pd.read_csv(os.path.join(input_dir, f"{model}/Hyperparameters_metrics.csv"))
-            best_set = df.loc[df['p_value_3D'].idxmax()]
-            model_best_set_hyperparameters[model] = {
-                "n_estimators": int(best_set['n_estimators']), 
-                "learning_rate": float(best_set['learning_rate']), 
-                "max_depth": int(best_set['max_depth']), 
-                "min_samples_leaf": int(best_set['min_samples_leaf']), 
-                "loss_regularization": best_set['loss_regularization']
-            }
-
-        if model == "XGB":
+        elif model == "XGB":
             df = pd.read_csv(os.path.join(input_dir, f"{model}/Hyperparameters_metrics.csv"))
             best_set = df.loc[df['p_value_8D'].idxmax()]
             model_best_set_hyperparameters[model] = {
@@ -58,6 +36,9 @@ if __name__ == "__main__":
                 "subsample" : float(best_set['subsample']), 
                 "early_stopping_rounds" : int(best_set['early_stopping_rounds'])
             }
+        else:
+            print(f"Model {model} not recognized. Skipping.")
+            continue
     
     with open(output_file, 'w') as f:
         json.dump(model_best_set_hyperparameters, f)

@@ -4,6 +4,10 @@ return an array containing the desired parameters of interest. They are to be gi
 import numpy as np
 import uproot
 import awkward as ak
+from Sample_io import WEIGHT_COLUMN
+
+# Branches whose product gives the total weight of an event.
+WEIGHT_BRANCHES = ("RWWeight", "fScaleFactor")
 
 # Mapping between the topology names (used in the config file and as the {topology} wildcard
 # of the workflow) and the integer values stored in the "Topology" parameter.
@@ -34,15 +38,23 @@ def topology_code(topology):
         raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
     return int(topology)
 
-def convert_input_file(input_file, input_tree, branches, analysis_params, modes = None, topologies = None):
-    """This function takes as input a ROOT FlatTree from and returns an array containing all the parameters of interest.
-    They are : E_nu, E_lep, cos(theta_lep), Q2, q0, q3, W, Eav, y, neutrino PDG, interaction, mode, charged current,
-    hit nucleus atomic number, hit nucleon PDG, multiplicity of final state proton, neutron, pions and the sum of their kinetic energies. """
+def convert_input_file(input_file, input_tree, branches, analysis_params, modes = None, topologies = None, return_weights = False):
+    """This function takes as input a ROOT FlatTree from and returns an array containing all the parameters of interest."""
     # Open the ROOT file
     file = uproot.open(input_file)
     tree = file[input_tree].arrays(branches, library="ak")
     
     tree["W"] = tree["W_nuc_rest"]
+
+    # Per-event weight: the total weight of an event is the product of its reweighting weight and of its scale factor.
+    if WEIGHT_BRANCHES[0] in tree.fields and WEIGHT_BRANCHES[1] in tree.fields:
+        tree[WEIGHT_COLUMN] = tree[WEIGHT_BRANCHES[0]] * tree[WEIGHT_BRANCHES[1]]
+    else:
+        print(f"Warning: the branches {WEIGHT_BRANCHES} were not both read from {input_file}: "
+              "every event is given a weight of 1. Add them to the 'inputs'/'branches' section of the "
+              "config file to use the weights stored in the input files.")
+        tree[WEIGHT_COLUMN] = ak.ones_like(tree["W"])
+
     # For dealing with modes, we use absolute value to allow common treatment of neutrinos and antineutrinos. No ambiguity arises because separate BDTs are trained for neutrinos and antineutrinos.
     tree["Mode"] = abs(tree["Mode"])
     # cut the tree to the desired modes if specified
@@ -96,11 +108,11 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
 
     # we create a topology parameter that gathers the modes based on the number of pions in the final state
 
-    # Previous analysis omitted photons above 10 MeV from _C_pi topologies, but this leads to big disparity in _COther. Now we allow events with photons
-    # gamma_deexcite_cut = 10e-3 # If E_gamma < 10 MeV, we consider it a de-excitation photon and don't count it towards the multiplicity
-    # clean = (tree["E_gamma"] < gamma_deexcite_cut) & (tree["N_other"] == 0)  # no photons/other particles
+    # Previous analysis omitted photons above 10 MeV from _C_pi topologies
+    gamma_deexcite_cut = 10e-3 # If E_gamma < 10 MeV, we consider it a de-excitation photon and don't count it towards the multiplicity
+    clean = (tree["E_gamma"] < gamma_deexcite_cut) & (tree["N_other"] == 0)  # no photons/other particles
+    # clean = (tree["N_other"] == 0)  # other option: nothing but prim lep, nucleons, pions, and photons in final state
 
-    clean = (tree["N_other"] == 0)  # nothing but prim lep, nucleons, pions, and photons in final state
     is_cc = tree["cc"]
     n_pi_charged = tree["N_pip"] + tree["N_pim"]
     n_pi_total = n_pi_charged + tree["N_pi0"]
@@ -131,8 +143,11 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
         tree["Topology"] = ak.where(topology_masks[top], topology_code(top), tree["Topology"])
 
     # we now create the final array containing the parameters of interest
+    # The weights are carried along as an extra column, so that the NaN cleaning below removes the same
+    # events from the parameters and from the weights.
+    columns = list(analysis_params) + ([WEIGHT_COLUMN] if return_weights else [])
     param_values = []
-    for param in analysis_params:
+    for param in columns:
         param_values.append(ak.to_numpy(tree[param]))
     data = np.array(np.column_stack(param_values))
     ## Check for NaN
@@ -142,4 +157,6 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
             data = data[~np.isnan(data[:, i])].copy()
         else:
             pass
+    if return_weights:
+        return data[:, :-1], data[:, -1]
     return data

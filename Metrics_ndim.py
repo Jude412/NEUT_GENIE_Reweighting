@@ -240,9 +240,6 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         ax.set_ylabel(f"{xlabels[j]}")
                         ax.set_title(f"2D Histogram Pull ({key})")
 
-                        # chi2
-                        
-
                         pdf.savefig(fig)
                         plt.close(fig)
 
@@ -278,16 +275,6 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         ax.set_ylabel(f"{xlabels[j]}")
                         ax.set_title(f"2D Histogram Ratio ({key})")
 
-                        # plt.imshow(
-                        # ratio_masked.T,
-                        # origin='lower',
-                        # aspect='auto',
-                        # extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
-                        # cmap=cmap,
-                        # vmin=vmin,
-                        # vmax=vmax
-                        # )
-                        
                         pdf.savefig(fig)
                         plt.close(fig)
 
@@ -354,7 +341,6 @@ def chi2_dof(original, target, weights_dict, binning_dict, target_weights = None
 def chi2_p_value(chi2, dof):
     p_value = 1 - chi2_dist.cdf(chi2, dof)
     return p_value
-
 
 def compute_swd(original, target, weights_dict, target_weights = None, n_directions=500):
     #we compute the Sliced Wasserstein Distance between the original and target distributions, using the weights for the original distribution.

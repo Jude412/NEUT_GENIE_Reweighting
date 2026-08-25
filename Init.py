@@ -5,8 +5,8 @@ saved in the "saved_swd_distribution + --output_dir" directory."""
 # Imports 
 from ROOT_file_conv import convert_input_file
 from Sample_creation import create_samples
+from Sample_io import save_sample
 from split_sizes import minimum_events
-import numpy as np
 import argparse
 import os
 
@@ -50,8 +50,8 @@ if __name__ == "__main__":
     Index_8D_params = [args.analysis_params.index(param) for param in args.params_8D]
     Index_3D_params = [args.analysis_params.index(param) for param in args.params_3D]
 
-    original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
-    target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
+    original, original_weights = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
+    target, target_weights = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
 
     min_events = minimum_events(args.train_percentage, args.val_percentage)
     for name, dataset in (("original", original), ("target", target)):
@@ -72,39 +72,44 @@ if __name__ == "__main__":
 
     # Splitting data
     print("Splitting data into training, validation and test samples...")
-    original_train, original_val, original_test = create_samples(original, args.train_percentage, args.val_percentage, args.random_seeds[0])
-    target_train, target_val, target_test = create_samples(target, args.train_percentage, args.val_percentage, args.random_seeds[1])
 
-    original_8D_train, original_8D_val, original_8D_test = create_samples(original_8D, args.train_percentage, args.val_percentage, args.random_seeds[0])
-    target_8D_train, target_8D_val, target_8D_test = create_samples(target_8D, args.train_percentage, args.val_percentage, args.random_seeds[1])
+    original_train, original_val, original_test, original_train_w, original_val_w, original_test_w = create_samples(
+            original, args.train_percentage, args.val_percentage, args.random_seeds[0], weights=original_weights)
+    target_train, target_val, target_test, target_train_w, target_val_w, target_test_w = create_samples(
+            target, args.train_percentage, args.val_percentage, args.random_seeds[1], weights=target_weights)
 
-    original_3D_train, original_3D_val, original_3D_test = create_samples(original_3D, args.train_percentage, args.val_percentage, args.random_seeds[0])
-    target_3D_train, target_3D_val, target_3D_test = create_samples(target_3D, args.train_percentage, args.val_percentage, args.random_seeds[1])
+    original_8D_train, original_8D_val, original_8D_test = create_samples(
+            original_8D, args.train_percentage, args.val_percentage, args.random_seeds[0])
+    target_8D_train, target_8D_val, target_8D_test = create_samples(
+            target_8D, args.train_percentage, args.val_percentage, args.random_seeds[1])
+
+    original_3D_train, original_3D_val, original_3D_test = create_samples(
+            original_3D, args.train_percentage, args.val_percentage, args.random_seeds[0])
+    target_3D_train, target_3D_val, target_3D_test = create_samples(
+            target_3D, args.train_percentage, args.val_percentage, args.random_seeds[1])
 
     # We save the splitted samples as csv files
     os.makedirs(os.path.join(args.output_dir_samples_3D), exist_ok=True)
     os.makedirs(os.path.join(args.output_dir_samples_8D), exist_ok=True)
     os.makedirs(os.path.join(args.output_dir_samples_all), exist_ok=True)
 
-    np.savetxt(os.path.join(args.output_dir_samples_all, "original_train.csv"), original_train, delimiter=",", header=",".join(args.analysis_params))
-    np.savetxt(os.path.join(args.output_dir_samples_all, "original_val.csv"), original_val, delimiter=",", header=",".join(args.analysis_params))
-    np.savetxt(os.path.join(args.output_dir_samples_all, "original_test.csv"), original_test, delimiter=",", header=",".join(args.analysis_params))
-    np.savetxt(os.path.join(args.output_dir_samples_all, "target_train.csv"), target_train, delimiter=",", header=",".join(args.analysis_params))
-    np.savetxt(os.path.join(args.output_dir_samples_all, "target_val.csv"), target_val, delimiter=",", header=",".join(args.analysis_params))
-    np.savetxt(os.path.join(args.output_dir_samples_all, "target_test.csv"), target_test, delimiter=",", header=",".join(args.analysis_params))
+save_sample(os.path.join(args.output_dir_samples_all, "original_train.csv"), original_train, original_train_w, args.analysis_params)
+    save_sample(os.path.join(args.output_dir_samples_all, "original_val.csv"), original_val, original_val_w, args.analysis_params)
+    save_sample(os.path.join(args.output_dir_samples_all, "original_test.csv"), original_test, original_test_w, args.analysis_params)
+    save_sample(os.path.join(args.output_dir_samples_all, "target_train.csv"), target_train, target_train_w, args.analysis_params)
+    save_sample(os.path.join(args.output_dir_samples_all, "target_val.csv"), target_val, target_val_w, args.analysis_params)
+    save_sample(os.path.join(args.output_dir_samples_all, "target_test.csv"), target_test, target_test_w, args.analysis_params)
 
-    np.savetxt(os.path.join(args.output_dir_samples_8D, "original_train.csv"), original_8D_train, delimiter=",", header=",".join(args.params_8D))
-    np.savetxt(os.path.join(args.output_dir_samples_8D, "original_val.csv"), original_8D_val, delimiter=",", header=",".join(args.params_8D))
-    np.savetxt(os.path.join(args.output_dir_samples_8D, "original_test.csv"), original_8D_test, delimiter=",", header=",".join(args.params_8D))
-    np.savetxt(os.path.join(args.output_dir_samples_8D, "target_train.csv"), target_8D_train, delimiter=",", header=",".join(args.params_8D))
-    np.savetxt(os.path.join(args.output_dir_samples_8D, "target_val.csv"), target_8D_val, delimiter=",", header=",".join(args.params_8D))
-    np.savetxt(os.path.join(args.output_dir_samples_8D, "target_test.csv"), target_8D_test, delimiter=",", header=",".join(args.params_8D))
+    save_sample(os.path.join(args.output_dir_samples_8D, "original_train.csv"), original_8D_train, original_train_w, args.params_8D)
+    save_sample(os.path.join(args.output_dir_samples_8D, "original_val.csv"), original_8D_val, original_val_w, args.params_8D)
+    save_sample(os.path.join(args.output_dir_samples_8D, "original_test.csv"), original_8D_test, original_test_w, args.params_8D)
+    save_sample(os.path.join(args.output_dir_samples_8D, "target_train.csv"), target_8D_train, target_train_w, args.params_8D)
+    save_sample(os.path.join(args.output_dir_samples_8D, "target_val.csv"), target_8D_val, target_val_w, args.params_8D)
+    save_sample(os.path.join(args.output_dir_samples_8D, "target_test.csv"), target_8D_test, target_test_w, args.params_8D)
 
-    np.savetxt(os.path.join(args.output_dir_samples_3D, "original_train.csv"), original_3D_train, delimiter=",", header=",".join(args.params_3D))
-    np.savetxt(os.path.join(args.output_dir_samples_3D, "original_val.csv"), original_3D_val, delimiter=",", header=",".join(args.params_3D))
-    np.savetxt(os.path.join(args.output_dir_samples_3D, "original_test.csv"), original_3D_test, delimiter=",", header=",".join(args.params_3D))
-    np.savetxt(os.path.join(args.output_dir_samples_3D, "target_train.csv"), target_3D_train, delimiter=",", header=",".join(args.params_3D))
-    np.savetxt(os.path.join(args.output_dir_samples_3D, "target_val.csv"), target_3D_val, delimiter=",", header=",".join(args.params_3D))
-    np.savetxt(os.path.join(args.output_dir_samples_3D, "target_test.csv"), target_3D_test, delimiter=",", header=",".join(args.params_3D))
-
-    
+    save_sample(os.path.join(args.output_dir_samples_3D, "original_train.csv"), original_3D_train, original_train_w, args.params_3D)
+    save_sample(os.path.join(args.output_dir_samples_3D, "original_val.csv"), original_3D_val, original_val_w, args.params_3D)
+    save_sample(os.path.join(args.output_dir_samples_3D, "original_test.csv"), original_3D_test, original_test_w, args.params_3D)
+    save_sample(os.path.join(args.output_dir_samples_3D, "target_train.csv"), target_3D_train, target_train_w, args.params_3D)
+    save_sample(os.path.join(args.output_dir_samples_3D, "target_val.csv"), target_3D_val, target_val_w, args.params_3D)
+    save_sample(os.path.join(args.output_dir_samples_3D, "target_test.csv"), target_3D_test, target_test_w, args.params_3D)

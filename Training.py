@@ -4,7 +4,8 @@ The script uses extensively the functions defined in Train_predict.py"""
 
 #imports
 import numpy as np
-from Train_predict import train_binning, predict_binning, train_NN, predict_NN, train_GBR, predict_GBR, train_XGB, predict_XGB
+from Sample_io import load_sample, sample_columns
+from Train_predict import train_binning, predict_binning, train_XGB, predict_XGB
 import argparse
 import pickle
 import json
@@ -34,12 +35,12 @@ if __name__ == "__main__":
     "   containing the paths to the predicted weights for each model will be saved.")
     args = parser.parse_args()
 
-    original_train = np.loadtxt(args.original_train, delimiter=',')
-    original_val = np.loadtxt(args.original_val, delimiter=',')
-    original_test = np.loadtxt(args.original_test, delimiter=',')
-    target_train = np.loadtxt(args.target_train, delimiter=',')
-    target_val = np.loadtxt(args.target_val, delimiter=',')
-    target_test = np.loadtxt(args.target_test, delimiter=',')
+    original_train, original_train_weight = load_sample(args.original_train)
+    original_val, original_val_weight = load_sample(args.original_val)
+    original_test, original_test_weight = load_sample(args.original_test)
+    target_train, target_train_weight = load_sample(args.target_train)
+    target_val, target_val_weight = load_sample(args.target_val)
+    target_test, target_test_weight = load_sample(args.target_test)
 
     for model_name in args.model_list:
         if model_name == 'binning':
@@ -48,46 +49,11 @@ if __name__ == "__main__":
                 hyperparams = all_hparams[model_name]
             else:
                 hyperparams = {"n_bins": 12, "n_neighs": 0}
-            model = train_binning(original_train, target_train, hyperparams["n_bins"], hyperparams["n_neighs"])
-            weights_train = predict_binning(model, original_train)
-            weights_val = predict_binning(model, original_val)
-            weights_test = predict_binning(model, original_test)
 
-        elif model_name == 'NN':
-            if args.hparams_dict is not None:
-                all_hparams = json.load(open(args.hparams_dict))
-                hyperparams = all_hparams[model_name]
-            else:
-                hyperparams = {"n_layers": 2, "n_neurons": 15, "epochs": 100, "batch_size": 2048, "activation_function": "tanh"}
-            history, model, train_scale_factor = train_NN(original_train, original_val, target_train, target_val, 
-                            n_layers = hyperparams["n_layers"], 
-                            n_neurons = hyperparams["n_neurons"], 
-                            epochs = hyperparams["epochs"], 
-                            batch_size = hyperparams["batch_size"], 
-                            activation_function = hyperparams["activation_function"])
-            weights_train = predict_NN(original_train, model, train_scale_factor)
-            weights_val = predict_NN(original_val, model, train_scale_factor)
-            weights_test = predict_NN(original_test, model, train_scale_factor)
-            # print(type(history.history['loss']), history.history['loss'])
-            # print(type(history.history['val_loss']), history.history['val_loss'])
-            df = np.concatenate((history.history['loss'], history.history['val_loss']), axis=0)
-            np.savetxt(os.path.join(args.save_model_path, f"NN_training_history_{np.shape(original_train)[1]}D.csv"), df, delimiter=',')
-        
-        elif model_name == 'GBR':
-            if args.hparams_dict is not None:
-                all_hparams = json.load(open(args.hparams_dict))
-                hyperparams = all_hparams[model_name]
-            else:
-                hyperparams = {"n_estimators": 110, "learning_rate": 0.01, "max_depth": 6, "min_samples_leaf": 70, "loss_regularization": 4}
-            model = train_GBR(original_train, target_train,
-                            n_estimators = hyperparams["n_estimators"], 
-                            learning_rate = hyperparams["learning_rate"], 
-                            max_depth = hyperparams["max_depth"], 
-                            min_samples_leaf = hyperparams["min_samples_leaf"], 
-                            loss_regularization = hyperparams["loss_regularization"])
-            weights_train = predict_GBR(original_train, target_train, model)
-            weights_val = predict_GBR(original_val, target_val, model)
-            weights_test = predict_GBR(original_test, target_test, model)
+            model = train_binning(original_train, target_train, hyperparams["n_bins"], hyperparams["n_neighs"], original_train_weight=original_train_weight, target_train_weight=target_train_weight)
+            weights_train = predict_binning(model, original_train, original_weight=original_train_weight)
+            weights_val = predict_binning(model, original_val, original_weight=original_val_weight)
+            weights_test = predict_binning(model, original_test, original_weight=original_test_weight)
 
         elif model_name == 'XGB':
             if args.hparams_dict is not None:
@@ -95,15 +61,16 @@ if __name__ == "__main__":
                 hyperparams = all_hparams[model_name]
             else:
                 hyperparams = {'n_estimators': 100, 'learning_rate': 0.05, 'max_depth': 3, 'gamma': 2, 'subsample': 0.3, 'early_stopping_rounds': 10}
-            with open(args.original_train) as f:
-                feature_names = f.readline()[1:].strip().split(",")
-            model = train_XGB(original_train, original_val, target_train, target_val, hparams = hyperparams, header = feature_names)
-            weights_train = predict_XGB(original_train, model, header = feature_names)
-            weights_val = predict_XGB(original_val, model, header = feature_names)
-            weights_test = predict_XGB(original_test, model, header = feature_names)
+
+            model = train_XGB(original_train, original_val, target_train, target_val, hparams = hyperparams,
+                              original_train_weight=original_train_weight, original_val_weight=original_val_weight,
+                              target_train_weight=target_train_weight, target_val_weight=target_val_weight)
+            weights_train = predict_XGB(original_train, model)
+            weights_val = predict_XGB(original_val, model)
+            weights_test = predict_XGB(original_test, model)
 
         else:
-            raise ValueError("Invalid model choice. Please choose from 'binning', 'NN', 'GBR', 'XGB'.")
+            raise ValueError("Invalid model choice. Please choose from 'binning', 'XGB'.")
         
         os.makedirs(args.save_weights_path, exist_ok=True)
         os.makedirs(args.save_model_path, exist_ok=True)
