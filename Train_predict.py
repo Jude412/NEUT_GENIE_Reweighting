@@ -145,28 +145,28 @@ def train_XGB(original_train, original_val, target_train, target_val,
     X_val = np.concatenate((original_val, target_val), axis=0)
     Y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
 
-    if header is not None and "Mode_v2" in header:
-        mode_v2_index = header.index("Mode_v2")
-        print("Mode_v2 is in the header, converting it to categorical.")
+    if header is not None and "Topology" in header:
+        topology_index = header.index("Topology")
+        print("Topology is in the header, converting it to categorical.")
         X_train_df = pd.DataFrame(X_train, columns=header)
         X_val_df   = pd.DataFrame(X_val, columns=header)
 
-        X_train_df["Mode_v2"] = X_train_df["Mode_v2"].astype("category")
-        X_val_df["Mode_v2"]   = X_val_df["Mode_v2"].astype("category")
+        X_train_df["Topology"] = X_train_df["Topology"].astype("category")
+        X_val_df["Topology"]   = X_val_df["Topology"].astype("category")
 
-        print("Equalizing the two classes overall, and giving equal importance to each mode_v2 in the training.")
+        print("Equalizing the two classes overall, and giving equal importance to each topology in the training.")
 
         original_train_weight = np.zeros(original_train.shape[0])
         original_val_weight = np.zeros(original_val.shape[0])
         target_train_weight = np.zeros(target_train.shape[0])
         target_val_weight = np.zeros(target_val.shape[0])
 
-        mode_v2_list = np.unique(original_train[:, mode_v2_index])
-        for mode in mode_v2_list:
-            original_train_weight[original_train[:, mode_v2_index] == mode] = 1 / ( np.sum(original_train[:, mode_v2_index] == mode) * len(mode_v2_list) )
-            original_val_weight[original_val[:, mode_v2_index] == mode] = 1 / ( np.sum(original_val[:, mode_v2_index] == mode) * len(mode_v2_list) )
-            target_train_weight[target_train[:, mode_v2_index] == mode] = 1 / ( np.sum(target_train[:, mode_v2_index] == mode) * len(mode_v2_list) )
-            target_val_weight[target_val[:, mode_v2_index] == mode] = 1 / ( np.sum(target_val[:, mode_v2_index] == mode) * len(mode_v2_list) )
+        topology_list = np.unique(original_train[:, topology_index])
+        for topology in topology_list:
+            original_train_weight[original_train[:, topology_index] == topology] = 1 / ( np.sum(original_train[:, topology_index] == topology) * len(topology_list) )
+            original_val_weight[original_val[:, topology_index] == topology] = 1 / ( np.sum(original_val[:, topology_index] == topology) * len(topology_list) )
+            target_train_weight[target_train[:, topology_index] == topology] = 1 / ( np.sum(target_train[:, topology_index] == topology) * len(topology_list) )
+            target_val_weight[target_val[:, topology_index] == topology] = 1 / ( np.sum(target_val[:, topology_index] == topology) * len(topology_list) )
 
         scale_factor = original_train.shape[0] / target_train.shape[0]
         target_train_weight *= scale_factor
@@ -210,9 +210,9 @@ def train_XGB(original_train, original_val, target_train, target_val,
 
 def predict_XGB(original, model, header = None):
     """This function uses the trained model to return the weights used for the reweighting process."""
-    if header is not None and "Mode_v2" in header:
+    if header is not None and "Topology" in header:
         original_df = pd.DataFrame(original, columns=header)
-        original_df["Mode_v2"] = original_df["Mode_v2"].astype("category")
+        original_df["Topology"] = original_df["Topology"].astype("category")
         predictions = model.predict_proba(original_df, iteration_range=(0, model.best_iteration + 1))
     else:
         predictions = model.predict_proba(original, iteration_range=(0, model.best_iteration + 1))

@@ -3,6 +3,9 @@ configfile: "config.yaml"
 import glob
 import json
 import os
+import re
+
+from split_sizes import minimum_events
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
@@ -10,7 +13,7 @@ DIM = len(config["parameters"]["reweighting"])
 NUMBER_OF_SETS = config["models"]["number_model_hyperparameters_sets"]
 MODELS = config["models"]["model_list"]
 MODES = config["analysis"]["modes"]
-MODES_v2 = config["analysis"]["modes_v2"]
+TOPOLOGIES = config["analysis"]["topologies"]
 RUNS = range(config["swd_bootstrapping"]["runs"])
 
 ORIG_DIR = config["inputs"]["original_dir"]
@@ -22,17 +25,6 @@ TARGET_DIR = config["inputs"]["target_dir"]
 # also contains a .root file under the same relative path in TARGET_DIR.
 # SAMPLES is a list of relative directory paths, e.g. ["FHC/numu/H2O"].
 # ---------------------------------------------------------------------------
-
-def get_samples():
-    original_files = glob.glob(os.path.join(ORIG_DIR, "**/*.root"), recursive=True)
-    seen = set()
-    samples = []
-    for of in original_files:
-        rel = os.path.relpath(os.path.dirname(of), ORIG_DIR)
-        if rel not in seen and glob.glob(os.path.join(TARGET_DIR, rel, "*.root")):
-            seen.add(rel)
-            samples.append(rel)
-    return samples
 
 def get_samples():
     original_files = glob.glob(os.path.join(ORIG_DIR, "**/*.root"), recursive=True)
@@ -78,15 +70,15 @@ def target_file_for(wildcards):
 # Per-sample path helpers
 # ---------------------------------------------------------------------------
 
-INIT_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/"
-INIT_SWD_DIR     = f"saved_swd_distribution/{TAG}/{{sample}}/"
-SAMPLES_DIR      = f"saved_samples/{TAG}/{{sample}}/custom_{DIM}D/"
-SWD_DIR          = f"saved_swd_distribution/{TAG}/{{sample}}/custom_{DIM}D/"
-MODEL_DIR        = f"saved_models/{TAG}/{{sample}}/custom_{DIM}D/"
-WEIGHTS_DIR      = f"saved_weights/{TAG}/{{sample}}/custom_{DIM}D/"
-FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/custom_{DIM}D/"
+INIT_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/{{topology}}/"
+INIT_SWD_DIR     = f"saved_swd_distribution/{TAG}/{{sample}}/{{topology}}/"
+SAMPLES_DIR      = f"saved_samples/{TAG}/{{sample}}/{{topology}}/custom_{DIM}D/"
+SWD_DIR          = f"saved_swd_distribution/{TAG}/{{sample}}/{{topology}}/custom_{DIM}D/"
+MODEL_DIR        = f"saved_models/{TAG}/{{sample}}/{{topology}}/custom_{DIM}D/"
+WEIGHTS_DIR      = f"saved_weights/{TAG}/{{sample}}/{{topology}}/custom_{DIM}D/"
+FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/{{topology}}/custom_{DIM}D/"
 HPS_DIR          = f"hps/{TAG}/"
-TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/custom_{DIM}D/"
+TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{{topology}}/custom_{DIM}D/"
 
 # Hyperparameter grid files are sample-independent (shared search space).
 HPS_FILES = []
@@ -95,8 +87,88 @@ for model in MODELS:
         HPS_FILES.append(os.path.join(HPS_DIR, f"{model}/{model}_hp_{run_id}.json"))
 
 # Wildcard constraint: sample paths contain only word characters and slashes.
+# The topology wildcard is restricted to the topology names listed in the config file,
+# which also removes the ambiguity with the (slash-containing) sample wildcard.
 wildcard_constraints:
-    sample="[^.]+"
+    sample="[^.]+",
+    topology="|".join(re.escape(str(t)) for t in TOPOLOGIES)
+
+# ---------------------------------------------------------------------------
+# Topology filtering
+# A topology holding too few events cannot be split into training, validation
+# and test samples, so it is skipped for the sample it is too sparse in.
+# The minimum depends on the configured split percentages: with the default
+# 40%/40% split, 3 events are needed (2 events would give int(0.4*2) = 0
+# training and 0 validation events).
+# The same topology is still trained on in the samples where it is filled.
+# ---------------------------------------------------------------------------
+
+MIN_EVENTS_PER_TOPOLOGY = minimum_events(
+    config["analysis"]["train_percentage"], config["analysis"]["val_percentage"]
+)
+# The counts of all topologies are gathered in a single per-sample file (no {topology} wildcard),
+# as they are all obtained from one pass over the ROOT files of the sample.
+TOPOLOGY_COUNTS_FILE = f"saved_samples/{TAG}/{{sample}}/topology_counts.json"
+
+def topologies_for_sample(sample):
+    """Return the topologies of the config file that hold enough events in a given sample."""
+    with open(checkpoints.count_topologies.get(sample=sample).output.counts_file) as f:
+        counts = json.load(f)
+
+    kept = []
+    for topology in TOPOLOGIES:
+        n_original = counts["original"][str(topology)]
+        n_target = counts["target"][str(topology)]
+        if n_original < MIN_EVENTS_PER_TOPOLOGY or n_target < MIN_EVENTS_PER_TOPOLOGY:
+            print(
+                f"Warning: topology {topology} of sample {sample} holds {n_original} original event(s) "
+                f"and {n_target} target event(s). Topologies with less than {MIN_EVENTS_PER_TOPOLOGY} "
+                "events in either the original or the target sample cannot be split into training, "
+                "validation and test samples: no training will be carried out for this topology in this sample."
+            )
+            continue
+        kept.append(topology)
+
+    return kept
+
+def all_metrics_files(wildcards):
+    return [
+        f"saved_figures/{TAG}/{sample}/{topology}/custom_{DIM}D/metrics.json"
+        for sample in SAMPLES
+        for topology in topologies_for_sample(sample)
+    ]
+
+
+checkpoint count_topologies:
+    input:
+        original_file=original_file_for,
+        target_file=target_file_for
+
+    params:
+        modes=MODES,
+        topologies=TOPOLOGIES,
+        original_tree=config["inputs"]["original_tree"],
+        target_tree=config["inputs"]["target_tree"],
+        branches=config["inputs"]["branches"]
+
+    output:
+        counts_file=TOPOLOGY_COUNTS_FILE
+
+    conda:
+        ENV
+
+    shell:
+        """
+        python count_topologies.py \
+            --input_file_original {input.original_file} \
+            --input_file_target {input.target_file} \
+            --input_tree_original {params.original_tree} \
+            --input_tree_target {params.target_tree} \
+            --branches {params.branches} \
+            --modes {params.modes} \
+            --topologies {params.topologies} \
+            --output_file {output.counts_file}
+        """
 
 
 rule initialize_analysis:
@@ -106,7 +178,6 @@ rule initialize_analysis:
 
     params:
         modes=MODES,
-        modes_v2=MODES_v2,
         original_tree=config["inputs"]["original_tree"],
         target_tree=config["inputs"]["target_tree"],
         # neutrino_PDG=config["analysis"]["neutrino_PDG"],
@@ -142,7 +213,7 @@ rule initialize_analysis:
             --params_8D {params.params_8D} \
             --params_3D {params.params_3D} \
             --modes {params.modes} \
-            --modes_v2 {params.modes_v2} \
+            --topologies {wildcards.topology} \
             --train_percentage {params.train_percentage} \
             --val_percentage {params.val_percentage} \
             --output_dir_samples_3D {output.samples_dir_3D} \
@@ -174,7 +245,7 @@ rule run_initial_bootstrap_3D:
 rule aggregate_bootstrap_3D:
     input:
         lambda wc: expand(
-            f"saved_swd_distribution/{TAG}/{wc.sample}/3D/indiv_bootstrap/run_{{run_id}}.npy",
+            f"saved_swd_distribution/{TAG}/{wc.sample}/{wc.topology}/3D/indiv_bootstrap/run_{{run_id}}.npy",
             run_id=RUNS
         )
     output:
@@ -212,7 +283,7 @@ rule run_initial_bootstrap_8D:
 rule aggregate_bootstrap_8D:
     input:
         lambda wc: expand(
-            f"saved_swd_distribution/{TAG}/{wc.sample}/8D/indiv_bootstrap/run_{{run_id}}.npy",
+            f"saved_swd_distribution/{TAG}/{wc.sample}/{wc.topology}/8D/indiv_bootstrap/run_{{run_id}}.npy",
             run_id=RUNS
         )
     output:
@@ -249,7 +320,7 @@ rule run_initial_bootstrap_all:
 rule aggregate_bootstrap_all:
     input:
         lambda wc: expand(
-            f"saved_swd_distribution/{TAG}/{wc.sample}/all/indiv_bootstrap/run_{{run_id}}.npy",
+            f"saved_swd_distribution/{TAG}/{wc.sample}/{wc.topology}/all/indiv_bootstrap/run_{{run_id}}.npy",
             run_id=RUNS
         )
     output:
@@ -270,7 +341,6 @@ rule custom_dim_analysis:
 
     params:
         modes=MODES,
-        modes_v2=MODES_v2,
         original_tree=config["inputs"]["original_tree"],
         target_tree=config["inputs"]["target_tree"],
         # neutrino_PDG=config["analysis"]["neutrino_PDG"],
@@ -296,7 +366,7 @@ rule custom_dim_analysis:
             --branches {params.branches} \
             --analysis_params {params.analysis_params} \
             --modes {params.modes} \
-            --modes_v2 {params.modes_v2} \
+            --topologies {wildcards.topology} \
             --train_percentage {params.train_percentage} \
             --val_percentage {params.val_percentage} \
             --parameters_interest {params.parameters_interest} \
@@ -325,7 +395,7 @@ rule run_custom_bootstrap:
 rule aggregate_custom_bootstrap:
     input:
         lambda wc: expand(
-            f"saved_swd_distribution/{TAG}/{wc.sample}/custom_{DIM}D/indiv_bootstrap/run_{{run_id}}.npy",
+            f"saved_swd_distribution/{TAG}/{wc.sample}/{wc.topology}/custom_{DIM}D/indiv_bootstrap/run_{{run_id}}.npy",
             run_id=RUNS
         )
     output:
@@ -406,12 +476,12 @@ rule single_fine_tuning:
 rule fine_tuning:
     input:
         lambda wc: [
-            f"TensorBoard/{TAG}/{wc.sample}/custom_{DIM}D/{model}/run_{run_id}_metrics.csv"
+            f"TensorBoard/{TAG}/{wc.sample}/{wc.topology}/custom_{DIM}D/{model}/run_{run_id}_metrics.csv"
             for model in MODELS
             for run_id in range(NUMBER_OF_SETS[model])
         ]
     output:
-        output_file=f"set_hyperparameters/{TAG}/{{sample}}/hyperparameters.json"
+        output_file=f"set_hyperparameters/{TAG}/{{sample}}/{{topology}}/hyperparameters.json"
     params:
         logdir=TENSORBOARD_DIR,
         model_list=MODELS
@@ -429,7 +499,7 @@ rule fine_tuning:
 rule train_models:
     input:
         samples_dir=SAMPLES_DIR,
-        hparam_file=f"set_hyperparameters/{TAG}/{{sample}}/hyperparameters.json",
+        hparam_file=f"set_hyperparameters/{TAG}/{{sample}}/{{topology}}/hyperparameters.json",
         last_sampled_file=SAMPLES_DIR + "target_test.csv"
 
     params:
@@ -510,8 +580,18 @@ rule compute_metrics_plots:
 
 rule all:
     input:
-        expand(
-            f"saved_figures/{TAG}/{{sample}}/custom_{DIM}D/metrics.json",
-            sample=SAMPLES
-        )
-    
+        # The counts are requested explicitly so that every sample is scanned in one go,
+        # rather than one sample at a time as the checkpoints get resolved.
+        counts_files=expand(TOPOLOGY_COUNTS_FILE, sample=SAMPLES),
+        metrics_files=all_metrics_files
+
+# Wildcard-free target running only the topology counting checkpoint on every sample.
+# The 'count_topologies' checkpoint itself carries a {sample} wildcard and so cannot be
+# asked for on the command line; ask for this rule instead:
+#     snakemake count_all_topologies --cores 8
+# Running it first makes the counts available to the checkpoints, so that a subsequent
+# dry run ('snakemake all -n') can resolve them and list every job of the workflow.
+rule count_all_topologies:
+    input:
+        counts_files=expand(TOPOLOGY_COUNTS_FILE, sample=SAMPLES)
+

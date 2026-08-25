@@ -5,6 +5,7 @@ saved in the "saved_swd_distribution + --output_dir" directory."""
 # Imports 
 from ROOT_file_conv import convert_input_file
 from Sample_creation import create_samples
+from split_sizes import minimum_events
 import numpy as np
 import argparse
 import os
@@ -25,8 +26,8 @@ if __name__ == "__main__":
     argparser.add_argument("--params_3D", nargs="+", help="List of parameters to use in 3D samples.")
     argparser.add_argument("--modes", type=int, nargs="+", help="Interaction modes to select (e.g. 1 for CCQE).",
                            required=False, default=[1])
-    argparser.add_argument("--modes_v2", type=int, nargs="+", help="Interaction modes v2 to select (e.g. 1 for CC0pi).",
-                           required=False, default=[1])
+    argparser.add_argument("--topologies", type=str, nargs="+", help="Interaction topologies to select, given by name (e.g. CC0pi).",
+                           required=False, default=["CC0pi"])
     # argparser.add_argument("--neutrino_PDG", type=int, help="PDG code of the neutrino type to select (e.g. 14 for numu).", 
     #                        required=False, default = 14)
     argparser.add_argument("--train_percentage", type=float, help="Percentage of the training sample (between 0 and 1).",
@@ -49,8 +50,19 @@ if __name__ == "__main__":
     Index_8D_params = [args.analysis_params.index(param) for param in args.params_8D]
     Index_3D_params = [args.analysis_params.index(param) for param in args.params_3D]
 
-    original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
-    target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, modes_v2 = args.modes_v2)
+    original = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
+    target = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies)
+
+    min_events = minimum_events(args.train_percentage, args.val_percentage)
+    for name, dataset in (("original", original), ("target", target)):
+        if len(dataset) < min_events:
+            raise ValueError(
+                f"The {name} distribution holds {len(dataset)} event(s) for the topologies {args.topologies}. "
+                f"At least {min_events} events are needed to build the training, validation and test samples "
+                f"with a training percentage of {args.train_percentage} and a validation percentage of "
+                f"{args.val_percentage}. "
+                "Such sparse topologies are skipped automatically when running the whole workflow."
+            )
 
     original_8D = original[:, Index_8D_params]
     target_8D = target[:, Index_8D_params]

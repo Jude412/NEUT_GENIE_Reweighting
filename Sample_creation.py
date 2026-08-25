@@ -5,10 +5,17 @@ samples is determined by the user. The function returns the samples as numpy arr
 #imports
 import numpy as np
 
+from split_sizes import minimum_events
+
 def create_samples(distribution, percentage_train, percentage_val, random_seed = 42, weights = None):
-    if distribution.shape[0] == 0:
+    n_events = distribution.shape[0]
+    min_events = minimum_events(percentage_train, percentage_val)
+    if n_events < min_events:
         raise ValueError(
-            "Cannot create samples from an empty distribution (0 events). "
+            f"Cannot split a distribution of {n_events} event(s) into a non-empty training, "
+            f"validation and test sample with a training percentage of {percentage_train} and a "
+            f"validation percentage of {percentage_val}: at least "
+            f"{min_events} events are needed. "
             "Check your sample selection and mode filters."
         )
 
