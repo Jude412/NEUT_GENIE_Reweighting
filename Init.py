@@ -82,10 +82,10 @@ if __name__ == "__main__":
     for idx, (name, distribution) in enumerate([("original", original), ("target", target)]):
         indices = np.arange(distribution.shape[0])
         np.random.seed(args.random_seeds[idx])
-        split_indices[name]["train"] = np.random.choice(indices, size=int(args.train_percentage*len(distribution)), replace=False)
+        split_indices[name]["train"] = np.random.choice(indices, size=int(args.train_percentage*len(distribution)), replace=False).tolist()
         all_but_train_idx = np.setdiff1d(indices, split_indices[name]["train"])
-        split_indices[name]["val"] = np.random.choice(all_but_train_idx, size=int(args.val_percentage*len(distribution)), replace=False)
-        split_indices[name]["test"] = np.setdiff1d(all_but_train_idx, split_indices[name]["val"])
+        split_indices[name]["val"] = np.random.choice(all_but_train_idx, size=int(args.val_percentage*len(distribution)), replace=False).tolist()
+        split_indices[name]["test"] = np.setdiff1d(all_but_train_idx, split_indices[name]["val"]).tolist()
 
 
     original_train, original_val, original_test, original_train_w, original_val_w, original_test_w = create_samples(original, split_indices["original"], weights=original_weights)
