@@ -5,7 +5,7 @@ The hyperparameters and metrics are saved in a tensorboard log file as well as a
 import json
 
 from Metrics_ndim import  compute_swd, compute_p_value, chi2_dof, chi2_hist_axis
-from Train_predict import train_binning, predict_binning, train_XGB, predict_XGB
+from Train_predict import train_binning, predict_binning, train_XGB, predict_XGB, best_iteration_of
 from Sample_io import load_sample
 import numpy as np
 import pandas as pd
@@ -125,7 +125,7 @@ if __name__ == "__main__":
             f"p_value_{original_test.shape[1]}D": p_value_ndim
         }
     elif args.model == 'XGB':
-        best_iter = model.best_iteration
+        best_iter = best_iteration_of(model)
         metrics = {
             "val_logloss": model.evals_result()['validation_1']['logloss'][best_iter],
             "val_auc": model.evals_result()['validation_1']['auc'][best_iter],

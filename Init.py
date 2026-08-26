@@ -103,6 +103,9 @@ if __name__ == "__main__":
     os.makedirs(os.path.join(args.output_dir_samples_all), exist_ok=True)
 
     # Save the split indices to a JSON file
+    indices_dir = os.path.dirname(args.indices_file)
+    if indices_dir:
+        os.makedirs(indices_dir, exist_ok=True)
     with open(args.indices_file, "w") as f:
         json.dump(split_indices, f, indent=4)
 
