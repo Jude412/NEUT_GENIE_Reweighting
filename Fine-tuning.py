@@ -5,7 +5,7 @@ The hyperparameters and metrics are saved in a tensorboard log file as well as a
 import json
 
 from Metrics_ndim import  compute_swd, compute_p_value, chi2_dof, chi2_hist_axis
-from Train_predict import train_binning, predict_binning, train_GBR, predict_GBR, train_XGB, predict_XGB
+from Train_predict import train_binning, predict_binning, train_XGB, predict_XGB
 from Sample_io import load_sample, sample_columns
 import numpy as np
 import pandas as pd
@@ -65,7 +65,7 @@ if __name__ == "__main__":
     if args.model == 'binning':
         hyperparams = json.load(open(args.hyperparameters)) if args.hyperparameters is not None else {"n_bins": 12, "n_neighs": 0}
         model = train_binning(original_train, target_train, hyperparams["n_bins"], hyperparams["n_neighs"], original_train_weight=original_train_weight, target_train_weight=target_train_weight)
-        weights_test = predict_binning(model, original_test, original_test_weight=original_test_weight)
+        weights_test = predict_binning(model, original_test, original_weight=original_test_weight)
 
         logdir = args.logdir + f"/run_{hyperparams['n_bins']}_{hyperparams['n_neighs']}_{int(time.time())}"
         writer = SummaryWriter(logdir)

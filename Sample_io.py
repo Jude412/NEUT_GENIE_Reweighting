@@ -45,3 +45,19 @@ def load_sample(sample_file):
 
     print(f"Warning: no '{WEIGHT_COLUMN}' column found in {sample_file}: every event is given a weight of 1.")
     return data, np.ones(data.shape[0])
+
+def create_samples(distribution, split_indices, weights = None):
+    train_idx = split_indices["train"]
+    val_idx = split_indices["val"]
+    test_idx = split_indices["test"]
+
+    train_sample = distribution[train_idx]
+    val_sample = distribution[val_idx]
+    test_sample = distribution[test_idx]
+    if weights is not None:
+        train_weights = weights[train_idx]
+        val_weights = weights[val_idx]
+        test_weights = weights[test_idx]
+        return train_sample, val_sample, test_sample, train_weights, val_weights, test_weights
+    else:
+        return train_sample, val_sample, test_sample

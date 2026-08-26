@@ -134,8 +134,9 @@ if __name__ == "__main__":
                     n_bins = 30
 
                 chi2_val, dof = chi2_hist_axis(original_test, target_test, weights_dict[key],
-                                               target_weights=target_test_weight,
-                                               param_index, n_bins=n_bins, x_min=x_min, x_max=x_max)  
+                                               param_index, target_weights=target_test_weight,
+                                               n_bins=n_bins, x_min=x_min, x_max=x_max)  
+
                 chi2_dim[param] = chi2_val/dof if dof > 0 else 0
                 chi2_dim[param+"_p_value"] = chi2_p_value(chi2_val, dof)
 

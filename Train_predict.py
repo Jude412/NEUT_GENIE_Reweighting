@@ -8,7 +8,6 @@ import pandas as pd
 from hep_ml import reweight
 from xgboost import XGBClassifier
 
-## binning
 
 def train_binning(original_train, target_train, n_bins, n_neighbours, original_train_weight=None, target_train_weight=None):
     """This function trains the binning reweighter given as arguments the training data, the number of bins and neighbours, 
@@ -27,10 +26,9 @@ def train_binning(original_train, target_train, n_bins, n_neighbours, original_t
 def predict_binning(model, original_val, original_weight=None):
     """This function returns the weights predicted by the binning reweighter given as argument
     the scaling is already included in the output, and is given by the ratio of the number of events in the two """
-    weights = model.predict_weights(original_val, original_val_weight/np.sum(original_val_weight) if original_val_weight is not None else None)
+    weights = model.predict_weights(original_val, original_weight/np.sum(original_weight) if original_weight is not None else None)
     reweighting_scale = 1 / np.sum(weights)
     return weights * reweighting_scale
-
 
 def train_XGB(original_train, original_val, target_train, target_val, 
               hparams = {"n_estimators": 100,
@@ -84,9 +82,6 @@ def train_XGB(original_train, original_val, target_train, target_val,
 
 def predict_XGB(original, model):
     """This function uses the trained model to return the weights used for the reweighting process."""
-    if original_weight is None:
-        original_weight = np.ones(original.shape[0])
-
     predictions = model.predict_proba(original, iteration_range=(0, model.best_iteration + 1))
     p = np.clip(predictions[:, 1], 1e-7, 1 - 1e-7)
     shape_weights = p / (1 - p) # Weights for shape matching

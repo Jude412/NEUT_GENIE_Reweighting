@@ -138,7 +138,6 @@ def all_metrics_files(wildcards):
         for topology in topologies_for_sample(sample)
     ]
 
-
 checkpoint count_topologies:
     input:
         original_file=original_file_for,
@@ -197,6 +196,7 @@ rule initialize_analysis:
         original_test_all=INIT_SAMPLES_DIR + "all/original_test.csv",
         target_test_all=INIT_SAMPLES_DIR + "all/target_test.csv",
         last_sampled_file_3D=INIT_SAMPLES_DIR + "3D/target_test.csv"
+        split_indices=INIT_SAMPLES_DIR + "split_indices.json"
 
     conda:
         ENV
@@ -218,7 +218,8 @@ rule initialize_analysis:
             --val_percentage {params.val_percentage} \
             --output_dir_samples_3D {output.samples_dir_3D} \
             --output_dir_samples_8D {output.samples_dir_8D} \
-            --output_dir_samples_all {output.samples_dir_all}
+            --output_dir_samples_all {output.samples_dir_all} \
+            --indices_file {output.split_indices}
         """
 
 
@@ -338,14 +339,13 @@ rule custom_dim_analysis:
     input:
         original_file=original_file_for,
         target_file=target_file_for
+        split_indices=INIT_SAMPLES_DIR + "split_indices.json"
 
     params:
         modes=MODES,
         original_tree=config["inputs"]["original_tree"],
         target_tree=config["inputs"]["target_tree"],
         # neutrino_PDG=config["analysis"]["neutrino_PDG"],
-        train_percentage=config["analysis"]["train_percentage"],
-        val_percentage=config["analysis"]["val_percentage"],
         branches=config["inputs"]["branches"],
         analysis_params=config["parameters"]["all"],
         parameters_interest=config["parameters"]["reweighting"],
@@ -363,12 +363,11 @@ rule custom_dim_analysis:
             --input_file_target {input.target_file} \
             --input_tree_original {params.original_tree} \
             --input_tree_target {params.target_tree} \
+            --split_indices {input.split_indices} \
             --branches {params.branches} \
             --analysis_params {params.analysis_params} \
             --modes {params.modes} \
             --topologies {wildcards.topology} \
-            --train_percentage {params.train_percentage} \
-            --val_percentage {params.val_percentage} \
             --parameters_interest {params.parameters_interest} \
             --samples_dir {output.samples_dir}
         """
@@ -417,8 +416,6 @@ rule prepare_hps:
     shell:
         """
         python list_parambinning.py --output_dir {HPS_DIR}
-        python list_paramnn.py  --output_dir {HPS_DIR}
-        python list_paramgbr.py  --output_dir {HPS_DIR}
         python list_paramxgb.py  --output_dir {HPS_DIR}
         """
 

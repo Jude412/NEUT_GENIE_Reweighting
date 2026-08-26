@@ -6,11 +6,11 @@ They are saved as csv files in a specified directory. The script can be run from
 
 #imports 
 from ROOT_file_conv import convert_input_file
-from Sample_creation import create_samples
-from Sample_io import save_sample
+from Sample_io import save_sample, create_samples
 from split_sizes import minimum_events
 import argparse
 import os
+import json
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Script to create the training and validation samples for the reweighting techniques.")
@@ -22,15 +22,11 @@ if __name__ == "__main__":
                            default="FlatTree_VARS")
     argparser.add_argument("--input_tree_target", required=False, type=str, help="Name of the FlatTree in the target input file.",
                            default="FlatTree_VARS")
+    argparser.add_argument("--split_indices", nargs=1, type=str, help="Path to the json file containing the indices for training, validation and test samples.")
     argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
     argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
     argparser.add_argument("--modes", type=int, nargs="+", required=False, help="Interaction modes to select (e.g. 1 for CCQE).", default=[1] )
     argparser.add_argument("--topologies", type=str, nargs="+", required=False, help="Interaction topologies to select, given by name (e.g. CC0pi).", default=["CC0pi"] )
-    # argparser.add_argument("--neutrino_PDG", type=int, required=False, help="PDG code of the neutrino type to select (e.g. 14 for numu).", default = 14)
-    argparser.add_argument("--train_percentage", type=float, required=False, help="Percentage of the training sample (between 0 and 1).", default=0.4)
-    argparser.add_argument("--val_percentage", type=float, required=False, help="Percentage of the validation sample (between 0 and 1).", default=0.4)
-    argparser.add_argument("--random_seeds", type = list, required=False, 
-                        help="List of 2 random seeds to use for the training and validation split.", default= [42, 43])
     argparser.add_argument("--samples_dir", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
                             default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/")
     argparser.add_argument("--parameters_interest", nargs='+', required=False, help="List of parameters to keep from the original files, in the format 'param1,param2,...'.",
@@ -62,8 +58,11 @@ if __name__ == "__main__":
     # We split the data into a training and validation set
     # The weights follow their events, so that every sample holds the weights of the events it contains.
     print("Splitting data into training, validation and test samples...")
-    original_train, original_val, original_test, original_train_w, original_val_w, original_test_w = create_samples(original, args.train_percentage, args.val_percentage, args.random_seeds[0], weights=original_weights)
-    target_train, target_val, target_test, target_train_w, target_val_w, target_test_w = create_samples(target, args.train_percentage, args.val_percentage, args.random_seeds[1], weights=target_weights)
+    with open(args.split_indices, 'r') as f:
+        split_indices = json.load(f)
+
+    original_train, original_val, original_test, original_train_w, original_val_w, original_test_w = create_samples(original, split_indices["original"], weights=original_weights)
+    target_train, target_val, target_test, target_train_w, target_val_w, target_test_w = create_samples(target, split_indices["target"], weights=target_weights)
 
     # We save the splitted samples as csv files
     os.makedirs(args.samples_dir, exist_ok=True)
