@@ -5,7 +5,7 @@ saved in the "saved_swd_distribution + --output_dir" directory."""
 # Imports 
 from ROOT_file_conv import convert_input_file
 from Sample_io import save_sample, create_samples
-from split_sizes import minimum_events
+from Split_sizes import minimum_events
 import argparse
 import os
 import json
@@ -49,8 +49,8 @@ if __name__ == "__main__":
     # Getting data from the files
     print("Getting data from the files...")
     
-    Index_8D_params = [args.analysis_params.index(param) for param in args.params_8D]
-    Index_3D_params = [args.analysis_params.index(param) for param in args.params_3D]
+    index_8D_params = [args.analysis_params.index(param) for param in args.params_8D]
+    index_3D_params = [args.analysis_params.index(param) for param in args.params_3D]
 
     original, original_weights = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
     target, target_weights = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
@@ -66,11 +66,11 @@ if __name__ == "__main__":
                 "Such sparse topologies are skipped automatically when running the whole workflow."
             )
 
-    original_8D = original[:, Index_8D_params]
-    target_8D = target[:, Index_8D_params]
+    original_8D = original[:, index_8D_params]
+    target_8D = target[:, index_8D_params]
 
-    original_3D = original[:, Index_3D_params]
-    target_3D = target[:, Index_3D_params]
+    original_3D = original[:, index_3D_params]
+    target_3D = target[:, index_3D_params]
 
     # Splitting data
     print("Splitting data into training, validation and test samples...")

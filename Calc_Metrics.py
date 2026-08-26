@@ -75,7 +75,7 @@ if __name__ == "__main__":
         "K_pim": r"$K_{pi^-}$ (GeV)"
     }
     
-    Index_parameters = [args.analysis_params.index(param) for param in args.interest_params]
+    index_parameters = [args.analysis_params.index(param) for param in args.interest_params]
 
     # We load the data and the weights
     original_test, original_test_weight = load_sample(args.original_test)
@@ -152,20 +152,20 @@ if __name__ == "__main__":
 
         chi2_3D_dict = chi2_dof(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict,
                                 target_weights=target_test_weight,
-                                binning_dict=binning_dict, List_param_interest = args.params_3D)
+                                binning_dict=binning_dict, list_param_interest = args.params_3D)
         chi2_3D_p_values = {key: chi2_p_value(chi2*dof_3D, dof_3D) for key, chi2 in chi2_3D_dict.items()}
         chi2_8D_dict = chi2_dof(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict,
                                 target_weights=target_test_weight,
-                                binning_dict=binning_dict, List_param_interest = args.params_8D)
+                                binning_dict=binning_dict, list_param_interest = args.params_8D)
         chi2_all_dict = chi2_dof(original_test, target_test, weights_dict,
                                  target_weights=target_test_weight,
-                                 binning_dict=binning_dict, List_param_interest = args.analysis_params)
+                                 binning_dict=binning_dict, list_param_interest = args.analysis_params)
 
 
     if args.compute_swd:
         if args.custom_swd_distribution is not None:
             swd_custom_list = np.load(args.custom_swd_distribution)
-            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters],
+            swd_dict_custom = compute_swd(original_test[:, index_parameters], target_test[:, index_parameters],
                                           weights_dict, target_weights=target_test_weight, 
                                           n_directions=args.n_directions)
             p_value_dict_custom = compute_p_value(swd_dict_custom, swd_custom_list)
@@ -219,7 +219,7 @@ if __name__ == "__main__":
             plt.plot(training_history["validation_1"]["logloss"], label='Validation Log Loss')
             plt.xlabel('Epoch')
             plt.ylabel('Log Loss')
-            plt.title(f'Training History for XGB {len(Index_parameters)}D training')
+            plt.title(f'Training History for XGB {len(index_parameters)}D training')
             plt.legend()
             pdf.savefig()
             plt.close()

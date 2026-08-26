@@ -58,34 +58,34 @@ def train_XGB(original_train, original_val, target_train, target_val,
     original_train_weight_bal = original_train_weight * norm_ratio_train
     original_val_weight_bal = original_val_weight * norm_ratio_val
 
-    X_train = np.concatenate((original_train, target_train), axis=0)
-    Y_train = np.concatenate((np.zeros(len(original_train)), np.ones(len(target_train))), axis=0)
-    W_train = np.concatenate((original_train_weight_bal, target_train_weight))
+    x_train = np.concatenate((original_train, target_train), axis=0)
+    y_train = np.concatenate((np.zeros(len(original_train)), np.ones(len(target_train))), axis=0)
+    w_train = np.concatenate((original_train_weight_bal, target_train_weight))
 
-    X_val = np.concatenate((original_val, target_val), axis=0)
-    Y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
-    W_val = np.concatenate((original_val_weight_bal, target_val_weight))
+    x_val = np.concatenate((original_val, target_val), axis=0)
+    y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
+    w_val = np.concatenate((original_val_weight_bal, target_val_weight))
 
     # Need weights of order 1 for XGB. Since this is only training shape, can just rescale the weights.
     # The median is taken over the events carrying a weight, so that a sample in which more than half of
     # the events have a null weight does not give a null (or non-finite) scale.
-    positive_weights = W_train[W_train > 0]
+    positive_weights = w_train[w_train > 0]
     weight_scale = np.median(positive_weights) if positive_weights.size > 0 else 1.
     if not np.isfinite(weight_scale) or weight_scale <= 0:
         print("Warning: the weights of the training sample give no usable scale: they are left untouched.")
         weight_scale = 1.
-    W_train /= weight_scale
-    W_val /= weight_scale
+    w_train /= weight_scale
+    w_val /= weight_scale
 
     bst = XGBClassifier(objective='binary:logistic',
                     eval_metric=['auc', 'logloss'],
                     **hparams)
 
     bst.fit(
-        X_train, Y_train,
-        sample_weight = W_train,
-        eval_set=[(X_train, Y_train), (X_val, Y_val)],
-        sample_weight_eval_set=[W_train, W_val],
+        x_train, y_train,
+        sample_weight = w_train,
+        eval_set=[(x_train, y_train), (x_val, y_val)],
+        sample_weight_eval_set=[w_train, w_val],
         verbose=False
     )
 

@@ -196,23 +196,23 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                 bins_i = np.percentile(target[:, i], percents)
                 bins_j = np.percentile(target[:, j], percents)
                 if target_weights is not None:
-                    H_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=target_weights/np.sum(target_weights))
+                    hist_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=target_weights/np.sum(target_weights))
                 else:
-                    H_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=np.ones_like(target[:, i])/len(target))
+                    hist_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=np.ones_like(target[:, i])/len(target))
                 for key in weights_dict.keys():
                     if pull:
-                        H_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/np.sum(weights_dict[key]))
-                        H_rw_uncert = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=(weights_dict[key]/np.sum(weights_dict[key]))**2)[0]
-                        sigma = np.sqrt(H_rw_uncert)
+                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/np.sum(weights_dict[key]))
+                        hist_rw_uncert = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=(weights_dict[key]/np.sum(weights_dict[key]))**2)[0]
+                        sigma = np.sqrt(hist_rw_uncert)
 
-                        H_pull = np.divide(
-                            H_rw - H_target,
+                        hist_pull = np.divide(
+                            hist_rw - hist_target,
                             sigma,
-                            out=np.zeros_like(H_rw),
+                            out=np.zeros_like(hist_rw),
                             where=sigma > 0
                         )
 
-                        pull_masked = np.ma.masked_where(sigma == 0, H_pull)
+                        pull_masked = np.ma.masked_where(sigma == 0, hist_pull)
                         # colormap with white for masked
                         cmap = plt.cm.coolwarm.copy()
                         cmap.set_bad(color='white')
@@ -244,11 +244,11 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         plt.close(fig)
 
                     else:
-                        H_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/np.sum(weights_dict[key]))
-                        ratio = np.divide(H_rw, H_target, out=np.zeros_like(H_rw), where=H_target > 0)
+                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/np.sum(weights_dict[key]))
+                        ratio = np.divide(hist_rw, hist_target, out=np.zeros_like(hist_rw), where=hist_target > 0)
 
                         # mask invalid bins
-                        ratio_masked = np.ma.masked_where(H_rw == 0, ratio)
+                        ratio_masked = np.ma.masked_where(hist_rw == 0, ratio)
 
                         # colormap with white for masked
                         cmap = plt.cm.coolwarm.copy()
@@ -312,12 +312,12 @@ def chi2_hist_axis(original, target, rw_weights, axis_number, target_weights = N
         dof = 1
     return chi2, dof
 
-def chi2_hist_naxis(original, target, rw_weights, binning_dict, target_weights = None, List_param_interest = ["Enu_true", "Plep", "CosLep"]):
+def chi2_hist_naxis(original, target, rw_weights, binning_dict, target_weights = None, list_param_interest = ["Enu_true", "Plep", "CosLep"]):
     n = original.shape[1]
     chi2 = 0
     dof = 0
-    for var in List_param_interest:
-        axis_number = List_param_interest.index(var)
+    for var in list_param_interest:
+        axis_number = list_param_interest.index(var)
         if var in binning_dict.keys():
             x_min = binning_dict[var]["x_min"]
             x_max = binning_dict[var]["x_max"]
@@ -331,10 +331,10 @@ def chi2_hist_naxis(original, target, rw_weights, binning_dict, target_weights =
         dof += dof_val
     return chi2, dof
 
-def chi2_dof(original, target, weights_dict, binning_dict, target_weights = None, List_param_interest = ["Enu_true", "Plep", "CosLep"]):
+def chi2_dof(original, target, weights_dict, binning_dict, target_weights = None, list_param_interest = ["Enu_true", "Plep", "CosLep"]):
     dict_chi2 = {}
     for key in weights_dict.keys():
-        chi2, dof = chi2_hist_naxis(original, target, weights_dict[key], binning_dict, target_weights, List_param_interest)
+        chi2, dof = chi2_hist_naxis(original, target, weights_dict[key], binning_dict, target_weights, list_param_interest)
         dict_chi2[key] = chi2 / dof if dof > 0 else 0
     return dict_chi2
 
@@ -360,10 +360,10 @@ def compute_swd(original, target, weights_dict, target_weights = None, n_directi
         target_proj = np.dot(target, vector)
         for k in range(len(weights_dict)):
             key = list(weights_dict.keys())[k]
-            W_dist = ot.wasserstein_1d(orig_proj, target_proj, 
+            w_dist = ot.wasserstein_1d(orig_proj, target_proj, 
                                        u_weights = weights_dict[key]/np.sum(weights_dict[key]), 
                                        v_weights=target_weights/np.sum(target_weights) if target_weights is not None else None)
-            dict_swd[key].append(W_dist)
+            dict_swd[key].append(w_dist)
         
     for k in range(len(weights_dict)):
         key = list(weights_dict.keys())[k]
@@ -400,11 +400,11 @@ def bootstrap_swd(target, n_bootstrap=1000, n_directions=500, target_weights = N
             first_proj = np.dot(target_bootstrap_1, vector)
             #print(orig_proj.shape)
             second_proj = np.dot(target_bootstrap_2, vector)
-            W_dist = ot.wasserstein_1d(first_proj, second_proj, 
+            w_dist = ot.wasserstein_1d(first_proj, second_proj, 
                                        u_weights = target_weights_bootstrap_1/np.sum(target_weights_bootstrap_1) if target_weights is not None else np.ones_like(target_bootstrap_1[:, 0])/len(target_bootstrap_1),
                                        v_weights = target_weights_bootstrap_2/np.sum(target_weights_bootstrap_2) if target_weights is not None else np.ones_like(target_bootstrap_2[:, 0])/len(target_bootstrap_2))
 
-            list_wass.append(W_dist)
+            list_wass.append(w_dist)
         
         list_swd.append(np.mean(list_wass))
         

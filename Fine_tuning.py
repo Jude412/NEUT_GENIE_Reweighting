@@ -40,7 +40,7 @@ if __name__ == "__main__":
     args.add_argument("--output_file", type = str, help = "The path to the csv file where the hyperparameters and metrics will be saved in addition to the tensorboard log file.")
     args = args.parse_args()
 
-    Index_params_interest = [args.analysis_params.index(param) for param in args.params_interest]
+    index_params_interest = [args.analysis_params.index(param) for param in args.params_interest]
 
     # Load the data
     original_train, original_train_weight = load_sample(os.path.join(args.train_sample_dir, "original_train.csv"))
@@ -162,17 +162,17 @@ if __name__ == "__main__":
         metrics[f"chi2_dof_{args.analysis_params[i]}"] = chi2/dof if dof > 0 else 0
 
     metrics[f"chi2_dof_3D"] = chi2_dof(original_test_3D, target_test_3D, weight_dict, binning_dict=binning_dict,
-                                       target_weights = target_test_3D_weight, List_param_interest = args.params_3D
+                                       target_weights = target_test_3D_weight, list_param_interest = args.params_3D
                                        )[args.model]
     metrics[f"chi2_dof_8D"] = chi2_dof(original_test_8D, target_test_8D, weight_dict, binning_dict=binning_dict,
-                                       target_weights = target_test_8D_weight, List_param_interest = args.params_8D
+                                       target_weights = target_test_8D_weight, list_param_interest = args.params_8D
                                        )[args.model]
     metrics["chi2_dof_all"] = chi2_dof(original_test_all, target_test_all, weight_dict, binning_dict=binning_dict,
-                                       target_weights = target_test_all_weight, List_param_interest = args.analysis_params
+                                       target_weights = target_test_all_weight, list_param_interest = args.analysis_params
                                        )[args.model]
     metrics[f"chi2_dof_{original_test.shape[1]}D"] = chi2_dof(original_test, target_test, weight_dict, 
                                                               binning_dict=binning_dict, target_weights = target_test_weight,
-                                                              List_param_interest = [args.analysis_params[i] for i in Index_params_interest])[args.model]
+                                                              list_param_interest = [args.analysis_params[i] for i in index_params_interest])[args.model]
 
     print(f"p_value_3D : {p_value_3D}")
     print(f"p_value_8D : {p_value_8D}")

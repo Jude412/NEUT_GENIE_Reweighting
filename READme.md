@@ -100,7 +100,7 @@ reweighted original sample matches the sum of the pre-weights of the target samp
 The samples are created once per sample and topology by 'Init.py', which splits the events into a training, a
 validation and a test sample and writes them for every analysis parameter ('all'), and for the '8D' and '3D'
 parameter sets. The indices of the split are saved next to them, in 'split_indices.json'. The samples holding the
-parameters the models are trained on ('parameters'/'reweighting') are then obtained by 'Splitting-script.py',
+parameters the models are trained on ('parameters'/'reweighting') are then obtained by 'Splitting_script.py',
 which simply keeps the corresponding columns of the 'all' samples: the input files are only ever read once, and
 the split is never recomputed.
 

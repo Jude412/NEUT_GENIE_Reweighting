@@ -19,8 +19,8 @@ contain only:
         something.root   (symlink)
 
 Usage:
-    python clean_GENIE_tree.py /path/to/source /path/to/destination
-    python clean_GENIE_tree.py /path/to/source /path/to/destination --dry-run
+    python Clean_GENIE_tree.py /path/to/source /path/to/destination
+    python Clean_GENIE_tree.py /path/to/source /path/to/destination --dry-run
 """
 
 import argparse

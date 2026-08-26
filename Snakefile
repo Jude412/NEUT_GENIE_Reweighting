@@ -5,7 +5,7 @@ import json
 import os
 import re
 
-from split_sizes import minimum_events
+from Split_sizes import minimum_events
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
@@ -158,7 +158,7 @@ checkpoint count_topologies:
 
     shell:
         """
-        python count_topologies.py \
+        python Count_topologies.py \
             --input_file_original {input.original_file} \
             --input_file_target {input.target_file} \
             --input_tree_original {params.original_tree} \
@@ -255,7 +255,7 @@ rule aggregate_bootstrap_3D:
         ENV
     shell:
         """
-        python aggregate.py \
+        python Aggregate.py \
             --input {input} \
             --output {output.final_file}
         """
@@ -293,7 +293,7 @@ rule aggregate_bootstrap_8D:
         ENV
     shell:
         """
-        python aggregate.py \
+        python Aggregate.py \
             --input {input} \
             --output {output.final_file}
         """
@@ -330,7 +330,7 @@ rule aggregate_bootstrap_all:
         ENV
     shell:
         """
-        python aggregate.py \
+        python Aggregate.py \
             --input {input} \
             --output {output.final_file}
         """
@@ -356,7 +356,7 @@ rule custom_dim_analysis:
         ENV
     shell:
         """
-        python Splitting-script.py \
+        python Splitting_script.py \
             --init_samples_dir {input.init_samples_dir} \
             --parameters_interest {params.parameters_interest} \
             --samples_dir {output.samples_dir}
@@ -393,7 +393,7 @@ rule aggregate_custom_bootstrap:
         ENV
     shell:
         """
-        python aggregate.py \
+        python Aggregate.py \
             --input {input} \
             --output {output.final_file}
         """
@@ -405,8 +405,8 @@ rule prepare_hps:
         ENV
     shell:
         """
-        python list_parambinning.py --output_dir {HPS_DIR}
-        python list_paramxgb.py  --output_dir {HPS_DIR}
+        python List_parambinning.py --output_dir {HPS_DIR}
+        python List_paramxgb.py  --output_dir {HPS_DIR}
         """
 
 rule single_fine_tuning:
@@ -439,7 +439,7 @@ rule single_fine_tuning:
 
     shell:
         """
-        python Fine-tuning.py \
+        python Fine_tuning.py \
             --train_sample_dir {input.train_samples_dir} \
             --sample_dir_3D {input.init_samples_dir_3D} \
             --sample_dir_8D {input.init_samples_dir_8D} \
@@ -476,7 +476,7 @@ rule fine_tuning:
         ENV
     shell:
         """
-        python gather_fine_tuning.py \
+        python Gather_fine_tuning.py \
             --input_dir {params.logdir} \
             --output_file {output.output_file} \
             --model_list {params.model_list}
