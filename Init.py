@@ -1,18 +1,23 @@
-"""This code initializes the analysis by importing the files to reweight, creating the 3D and 8D samples, and computing the bootstrapped
-SWD distribution for the target_test 3D and 8D samples. The sampels are saved in the "saved_samples + --output_dir" directory, and the SWD distribution is
-saved in the "saved_swd_distribution + --output_dir" directory."""
+"""This code initializes the analysis by importing the files to reweight and creating the samples of every
+configured set of analysis parameters. The events are read once and split into a training, a validation and
+a test sample, which are then written for every parameter set in the "--output_dir" directory, in a
+sub-directory named after the set. The indices of the split are saved next to them."""
 
 # Imports 
 from ROOT_file_conv import convert_input_file
 from Sample_io import save_sample, create_samples
+from Param_sets import ALL_PARAMS_SET, add_param_set_argument, param_sets_from_args, indices_of
 from Split_sizes import minimum_events
 import argparse
 import os
 import json
 import numpy as np
 
+# The samples the events of a distribution are split into.
+SPLITS = ("train", "val", "test")
+
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser(description="Script to create the 3D and 8D training and validation samples and bootstrappedSWD distribution for the reweighting techniques.")
+    argparser = argparse.ArgumentParser(description="Script to create the training, validation and test samples of every configured set of analysis parameters.")
     argparser.add_argument("--input_file_original", required=False, type=str, help="Path to the original input ROOT file.",
                            default="/vols/dune/jmm224/t2knova/reweighting/NEUT_files/T2KND_FHC_numu_H2O_NEUT562_1M_0000_NUISFLAT.root")
     argparser.add_argument("--input_file_target", required=False, type=str, help="Path to the target input ROOT file.",
@@ -23,8 +28,7 @@ if __name__ == "__main__":
                            default="FlatTree_VARS")
     argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
     argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
-    argparser.add_argument("--params_8D", nargs="+", help="List of parameters to use in 8D samples.")
-    argparser.add_argument("--params_3D", nargs="+", help="List of parameters to use in 3D samples.")
+    add_param_set_argument(argparser, help_suffix=f" The '{ALL_PARAMS_SET}' set holding every analysis parameter is always written.")
     argparser.add_argument("--modes", type=int, nargs="+", help="Interaction modes to select (e.g. 1 for CCQE).",
                            required=False, default=[1])
     argparser.add_argument("--topologies", type=str, nargs="+", help="Interaction topologies to select, given by name (e.g. CC0pi).",
@@ -37,20 +41,21 @@ if __name__ == "__main__":
                            required=False, default=0.4)
     argparser.add_argument("--random_seeds", type=int, nargs="+", required=False, 
                         help="List of 2 random seeds to use for the training and validation split.",default= [42, 43])
-    argparser.add_argument("--output_dir_samples_3D", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
-                            default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/3D/")
-    argparser.add_argument("--output_dir_samples_8D", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
-                            default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/8D/")
-    argparser.add_argument("--output_dir_samples_all", "--output_dir_samples_21D", dest="output_dir_samples_all", required=False, type=str, help="Path to the output directory where the samples containing all configured analysis parameters will be saved.",
-                            default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/all/")
+    argparser.add_argument("--output_dir", required=False, type=str,
+                           help="Path to the output directory the samples will be saved in, each parameter set in a "
+                                "sub-directory named after it.",
+                           default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/")
     argparser.add_argument("--indices_file", required=False, type=str, help="Path to the output json file containing the indices for training, validation and test samples.", default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/split_indices.json")
     args = argparser.parse_args()
 
+    # The set holding every analysis parameter is always written, as the metrics of the other sets
+    # are computed from the samples holding it.
+    param_sets = {ALL_PARAMS_SET: list(args.analysis_params)}
+    param_sets.update(param_sets_from_args(args.param_set))
+    set_indices = {name: indices_of(params, args.analysis_params) for name, params in param_sets.items()}
+
     # Getting data from the files
     print("Getting data from the files...")
-    
-    index_8D_params = [args.analysis_params.index(param) for param in args.params_8D]
-    index_3D_params = [args.analysis_params.index(param) for param in args.params_3D]
 
     original, original_weights = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
     target, target_weights = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
@@ -66,18 +71,12 @@ if __name__ == "__main__":
                 "Such sparse topologies are skipped automatically when running the whole workflow."
             )
 
-    original_8D = original[:, index_8D_params]
-    target_8D = target[:, index_8D_params]
-
-    original_3D = original[:, index_3D_params]
-    target_3D = target[:, index_3D_params]
-
     # Splitting data
     print("Splitting data into training, validation and test samples...")
 
     split_indices = {
-            "original": {"train": [], "val": [], "test": []},
-            "target": {"train": [], "val": [], "test": []}
+            "original": {split: [] for split in SPLITS},
+            "target": {split: [] for split in SPLITS}
             }
     for idx, (name, distribution) in enumerate([("original", original), ("target", target)]):
         indices = np.arange(distribution.shape[0])
@@ -87,21 +86,6 @@ if __name__ == "__main__":
         split_indices[name]["val"] = np.random.choice(all_but_train_idx, size=int(args.val_percentage*len(distribution)), replace=False).tolist()
         split_indices[name]["test"] = np.setdiff1d(all_but_train_idx, split_indices[name]["val"]).tolist()
 
-
-    original_train, original_val, original_test, original_train_w, original_val_w, original_test_w = create_samples(original, split_indices["original"], weights=original_weights)
-    target_train, target_val, target_test, target_train_w, target_val_w, target_test_w = create_samples(target, split_indices["target"], weights=target_weights)
-
-    original_8D_train, original_8D_val, original_8D_test = create_samples(original_8D, split_indices["original"])
-    target_8D_train, target_8D_val, target_8D_test = create_samples(target_8D, split_indices["target"])
-
-    original_3D_train, original_3D_val, original_3D_test = create_samples(original_3D, split_indices["original"])
-    target_3D_train, target_3D_val, target_3D_test = create_samples(target_3D, split_indices["target"])
-
-    # We save the splitted samples as csv files
-    os.makedirs(os.path.join(args.output_dir_samples_3D), exist_ok=True)
-    os.makedirs(os.path.join(args.output_dir_samples_8D), exist_ok=True)
-    os.makedirs(os.path.join(args.output_dir_samples_all), exist_ok=True)
-
     # Save the split indices to a JSON file
     indices_dir = os.path.dirname(args.indices_file)
     if indices_dir:
@@ -109,23 +93,20 @@ if __name__ == "__main__":
     with open(args.indices_file, "w") as f:
         json.dump(split_indices, f, indent=0)
 
-    save_sample(os.path.join(args.output_dir_samples_all, "original_train.csv"), original_train, original_train_w, args.analysis_params)
-    save_sample(os.path.join(args.output_dir_samples_all, "original_val.csv"), original_val, original_val_w, args.analysis_params)
-    save_sample(os.path.join(args.output_dir_samples_all, "original_test.csv"), original_test, original_test_w, args.analysis_params)
-    save_sample(os.path.join(args.output_dir_samples_all, "target_train.csv"), target_train, target_train_w, args.analysis_params)
-    save_sample(os.path.join(args.output_dir_samples_all, "target_val.csv"), target_val, target_val_w, args.analysis_params)
-    save_sample(os.path.join(args.output_dir_samples_all, "target_test.csv"), target_test, target_test_w, args.analysis_params)
+    # We save the splitted samples of every parameter set as csv files. The events are split once,
+    # so that a given sample holds the same events in every parameter set.
+    samples = {
+        "original": create_samples(original, split_indices["original"], weights=original_weights),
+        "target": create_samples(target, split_indices["target"], weights=target_weights),
+    }
 
-    save_sample(os.path.join(args.output_dir_samples_8D, "original_train.csv"), original_8D_train, original_train_w, args.params_8D)
-    save_sample(os.path.join(args.output_dir_samples_8D, "original_val.csv"), original_8D_val, original_val_w, args.params_8D)
-    save_sample(os.path.join(args.output_dir_samples_8D, "original_test.csv"), original_8D_test, original_test_w, args.params_8D)
-    save_sample(os.path.join(args.output_dir_samples_8D, "target_train.csv"), target_8D_train, target_train_w, args.params_8D)
-    save_sample(os.path.join(args.output_dir_samples_8D, "target_val.csv"), target_8D_val, target_val_w, args.params_8D)
-    save_sample(os.path.join(args.output_dir_samples_8D, "target_test.csv"), target_8D_test, target_test_w, args.params_8D)
+    for set_name, params in param_sets.items():
+        set_dir = os.path.join(args.output_dir, set_name)
+        os.makedirs(set_dir, exist_ok=True)
 
-    save_sample(os.path.join(args.output_dir_samples_3D, "original_train.csv"), original_3D_train, original_train_w, args.params_3D)
-    save_sample(os.path.join(args.output_dir_samples_3D, "original_val.csv"), original_3D_val, original_val_w, args.params_3D)
-    save_sample(os.path.join(args.output_dir_samples_3D, "original_test.csv"), original_3D_test, original_test_w, args.params_3D)
-    save_sample(os.path.join(args.output_dir_samples_3D, "target_train.csv"), target_3D_train, target_train_w, args.params_3D)
-    save_sample(os.path.join(args.output_dir_samples_3D, "target_val.csv"), target_3D_val, target_val_w, args.params_3D)
-    save_sample(os.path.join(args.output_dir_samples_3D, "target_test.csv"), target_3D_test, target_test_w, args.params_3D)
+        for distribution_name, (split_samples, split_weights) in samples.items():
+            for split in SPLITS:
+                save_sample(os.path.join(set_dir, f"{distribution_name}_{split}.csv"),
+                            split_samples[split][:, set_indices[set_name]], split_weights[split], params)
+
+        print(f"Wrote the samples of the parameter set '{set_name}' ({params}) in {set_dir}.")
