@@ -22,7 +22,7 @@ if __name__ == "__main__":
                            default="FlatTree_VARS")
     argparser.add_argument("--input_tree_target", required=False, type=str, help="Name of the FlatTree in the target input file.",
                            default="FlatTree_VARS")
-    argparser.add_argument("--split_indices", nargs=1, type=str, help="Path to the json file containing the indices for training, validation and test samples.")
+    argparser.add_argument("--split_indices", required=True, type=str, help="Path to the json file containing the indices for training, validation and test samples.")
     argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
     argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
     argparser.add_argument("--modes", type=int, nargs="+", required=False, help="Interaction modes to select (e.g. 1 for CCQE).", default=[1] )
@@ -40,17 +40,6 @@ if __name__ == "__main__":
 
     original_load, original_weights = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
     target_load, target_weights = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
-
-    min_events = minimum_events(args.train_percentage, args.val_percentage)
-    for name, dataset in (("original", original_load), ("target", target_load)):
-        if len(dataset) < min_events:
-            raise ValueError(
-                f"The {name} distribution holds {len(dataset)} event(s) for the topologies {args.topologies}. "
-                f"At least {min_events} events are needed to build the training, validation and test samples "
-                f"with a training percentage of {args.train_percentage} and a validation percentage of "
-                f"{args.val_percentage}. "
-                "Such sparse topologies are skipped automatically when running the whole workflow."
-            )
 
     original = original_load[:, [args.analysis_params.index(param) for param in args.parameters_interest]]
     target = target_load[:, [args.analysis_params.index(param) for param in args.parameters_interest]]

@@ -67,7 +67,7 @@ def train_XGB(original_train, original_val, target_train, target_val,
     W_val = np.concatenate((original_val_weight_bal, target_val_weight))
 
     # Need weights of order 1 for XGB. Since this is only training shape, can just rescale the weights. 
-    weight_scale = np.mean(W_train)
+    weight_scale = np.median(W_train)
     W_train /= weight_scale
     W_val /= weight_scale
 

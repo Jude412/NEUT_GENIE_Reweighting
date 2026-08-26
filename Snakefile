@@ -195,7 +195,7 @@ rule initialize_analysis:
         target_test_8D=INIT_SAMPLES_DIR + "8D/target_test.csv",
         original_test_all=INIT_SAMPLES_DIR + "all/original_test.csv",
         target_test_all=INIT_SAMPLES_DIR + "all/target_test.csv",
-        last_sampled_file_3D=INIT_SAMPLES_DIR + "3D/target_test.csv"
+        last_sampled_file_3D=INIT_SAMPLES_DIR + "3D/target_test.csv",
         split_indices=INIT_SAMPLES_DIR + "split_indices.json"
 
     conda:
@@ -338,7 +338,7 @@ rule aggregate_bootstrap_all:
 rule custom_dim_analysis:
     input:
         original_file=original_file_for,
-        target_file=target_file_for
+        target_file=target_file_for,
         split_indices=INIT_SAMPLES_DIR + "split_indices.json"
 
     params:

@@ -9,6 +9,7 @@ from split_sizes import minimum_events
 import argparse
 import os
 import json
+import numpy as np
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Script to create the 3D and 8D training and validation samples and bootstrappedSWD distribution for the reweighting techniques.")
@@ -34,7 +35,7 @@ if __name__ == "__main__":
                            required=False, default=0.4)
     argparser.add_argument("--val_percentage", type=float, help="Percentage of the validation sample (between 0 and 1).",
                            required=False, default=0.4)
-    argparser.add_argument("--random_seeds", type = list, required=False, 
+    argparser.add_argument("--random_seeds", type=int, nargs="+", required=False, 
                         help="List of 2 random seeds to use for the training and validation split.",default= [42, 43])
     argparser.add_argument("--output_dir_samples_3D", required=False, type=str, help="Path to the output directory where the splitted samples will be saved.",
                             default="/vols/dune/jmm224/t2knova/reweighting/saved_samples/first_test/3D/")
@@ -81,10 +82,10 @@ if __name__ == "__main__":
     for idx, (name, distribution) in enumerate([("original", original), ("target", target)]):
         indices = np.arange(distribution.shape[0])
         np.random.seed(args.random_seeds[idx])
-        split_indices[name]["train"] = np.random.choice(indices, size=int(percentage_train*len(distribution)), replace=False)
-        all_but_train_idx = np.setdiff1d(indices, train_indices[name])
-        split_indices[name]["val"] = np.random.choice(all_but_train_idx, size=int(percentage_val*len(distribution)), replace=False)
-        split_indices[name]["test"] = np.setdiff1d(all_but_train_idx, val_indices)
+        split_indices[name]["train"] = np.random.choice(indices, size=int(args.train_percentage*len(distribution)), replace=False)
+        all_but_train_idx = np.setdiff1d(indices, split_indices[name]["train"])
+        split_indices[name]["val"] = np.random.choice(all_but_train_idx, size=int(args.val_percentage*len(distribution)), replace=False)
+        split_indices[name]["test"] = np.setdiff1d(all_but_train_idx, split_indices[name]["val"])
 
 
     original_train, original_val, original_test, original_train_w, original_val_w, original_test_w = create_samples(original, split_indices["original"], weights=original_weights)
@@ -103,7 +104,7 @@ if __name__ == "__main__":
 
     # Save the split indices to a JSON file
     with open(args.indices_file, "w") as f:
-        json.dump(split_indices, f)
+        json.dump(split_indices, f, indent=4)
 
     save_sample(os.path.join(args.output_dir_samples_all, "original_train.csv"), original_train, original_train_w, args.analysis_params)
     save_sample(os.path.join(args.output_dir_samples_all, "original_val.csv"), original_val, original_val_w, args.analysis_params)

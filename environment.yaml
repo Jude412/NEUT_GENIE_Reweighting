@@ -6,7 +6,6 @@ dependencies:
     - pip
     - pip:
       - matplotlib
-      - tensorflow
       - hep_ml
       - torch
       - mplhep

@@ -36,7 +36,7 @@ In the 'features'/'parameters_interest' section, you can specifiy the parameters
 Please pick from the following list : ["Enu_true", "ELep", "CosLep", "Q2", "q0", "q3", "W", "Eav"].
 
 In the 'models'/'model_list' section, you can specifiy the models that you want to use.
-Please pick from the following list : ['binning', 'NN', 'GBR', 'XGB'].
+Please pick from the following list : ['binning', 'XGB'].
 
 In the 'dimensions'/'dim' section, you can specify the dimension of the parameters of interest. This is purely for folder creation, so that each combination of parameters can be created.
 Default is a number, but you may give any value as argument.
@@ -51,8 +51,6 @@ In the 'set_hyperparameters' directory, create a sub-directory with the same tag
 Inside this directory, create a file named 'hyperparameters.json'. This file should contain a dictionnary, containing a dictionnary of the set of hyperparameters you want the different method to be built with. 
 For example : 
 {"binning": {"n_bins" : 10, "n_neighs" : 0},
-"NN" : {"n_layers" : 2, "n_neurons" : 15, "epochs" : 100, "batch_size" : 4096, "activation_function" : "tanh"},
-"GBR" : {"n_estimators": 110, "learning_rate": 0.03, "max_depth": 4, "min_samples_leaf": 90, "loss_regularization":3},
 "XGB" : {"n_estimators" : 80, "gamma" : 0, "max_depth" : 3, "learning_rate" : 0.075, "subsample" : 1, "early_stopping_rounds" : 10}}
 
 Please give as many sets as different method you want to train.

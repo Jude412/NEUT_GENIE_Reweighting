@@ -1,7 +1,7 @@
 """Reading and writing of the sample csv files used throughout the workflow.
 
 Every sample holds the analysis parameters of the events in its first columns and the total weight of
-the events ('Weight', the product of the 'RWWeight' and 'fScaleFactor' branches of the input files) in
+the events ('PreWeight', the product of the 'RWWeight' and 'fScaleFactor' branches of the input files) in
 its last column. The helpers below keep the weights out of the parameters, so that the trainings and the
 metrics are carried out on the weighted events without ever using the weight itself as a parameter."""
 

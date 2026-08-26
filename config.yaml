@@ -103,4 +103,4 @@ swd_bootstrapping:
   n_directions: 500
 
 output:
-  tag: "testing_preweights"
+  tag: "testing_preweights2"
