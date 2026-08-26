@@ -4,7 +4,7 @@ The script uses extensively the functions defined in Train_predict.py"""
 
 #imports
 import numpy as np
-from Sample_io import load_sample, sample_columns
+from Sample_io import load_sample
 from Train_predict import train_binning, predict_binning, train_XGB, predict_XGB
 import argparse
 import pickle

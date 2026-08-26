@@ -6,7 +6,7 @@ import json
 
 from Metrics_ndim import  compute_swd, compute_p_value, chi2_dof, chi2_hist_axis
 from Train_predict import train_binning, predict_binning, train_XGB, predict_XGB
-from Sample_io import load_sample, sample_columns
+from Sample_io import load_sample
 import numpy as np
 import pandas as pd
 import os
