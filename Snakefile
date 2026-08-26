@@ -340,6 +340,8 @@ rule custom_dim_analysis:
         # The samples holding every analysis parameter are already split by 'initialize_analysis':
         # the parameters of interest are simply kept from them, so that the events of a given sample
         # are exactly the ones the initialisation put in it.
+        # The last sample written by the initialisation is requested alongside its directory, as the
+        # timestamp of a directory does not follow the files it holds: it is not passed to the script.
         init_samples_dir=INIT_SAMPLES_DIR + "all/",
         last_init_sampled_file=INIT_SAMPLES_DIR + "all/target_test.csv"
 
