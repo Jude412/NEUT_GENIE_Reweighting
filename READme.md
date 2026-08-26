@@ -32,11 +32,30 @@ In the 'analysis' section, you can specify
     -the val_percentage which defines the amount of data that go into your validation sample (default is 0.4, should be between 0 and 1)
     Please make sure that the sum of the percentages does not exceed 1. (The amount of datat going into the test sample is automatically computed)
 
-In the 'features'/'parameters_interest' section, you can specifiy the parameters that you want to use to train the different methods on.
-Please pick from the following list : ["Enu_true", "ELep", "CosLep", "Q2", "q0", "q3", "W", "Eav"].
+In the 'parameters'/'reweighting' section, you can specifiy the parameters that you want to use to train the different methods on.
+Please pick from the parameters listed in the 'parameters'/'all' section.
+
+The metrics are computed for several named sets of parameters, listed in the 'parameters'/'metric_sets' section
+(for example '3D' and '8D'). Every parameter of a set must also be listed in the 'parameters'/'all' section, which
+holds every analysis parameter. Adding or removing a set there is all it takes: the samples, the bootstrapped SWD
+distribution and the metrics of the new set are produced by the same rules as the other ones, and its metrics are
+written under keys named after it (ex : 'swd_3D', 'p_value_3D', 'chi2_3D'). The 'all' set and the set of the
+reweighting parameters (named 'custom_{Dim}D') are always added to the configured ones.
 
 In the 'models'/'model_list' section, you can specifiy the models that you want to use.
 Please pick from the following list : ['binning', 'XGB'].
+
+In the 'models'/'grid_file' section, you can give the json file holding the hyperparameter grid every model is
+fine-tuned over (default is 'hyperparameter_grids.json'). It holds, for each model, the list of values every
+hyperparameter is scanned over, for example :
+{"binning": {"n_bins": [5, 10], "n_neighs": [0, 1]},
+ "XGB": {"n_estimators": [80, 100], "max_depth": [3], "learning_rate": [0.075], "subsample": [1], "early_stopping_rounds": [10]}}
+The grid of a model is the cartesian product of those lists (four sets of hyperparameters for the 'binning' example
+above), so the number of fine-tuning runs of a model follows from the grid file and never has to be given.
+
+In the 'models'/'selection_metric' section, you can give, for each model, the metric its best set of hyperparameters
+is picked with and whether that metric is minimised ('min') or maximised ('max'). The metrics are named after the
+parameter sets above (ex : 'SWD_3D', 'p_value_8D', 'chi2_dof_all').
 
 In the 'dimensions'/'dim' section, you can specify the dimension of the parameters of interest. This is purely for folder creation, so that each combination of parameters can be created.
 Default is a number, but you may give any value as argument.
@@ -45,16 +64,14 @@ In the 'output'/'tag' you can specify the tag that you want to give to your anal
 For example this can include parts of the name of the reweighted distributions. 
 Please use strings.
 
-[The following steps are hacky and will be removed when the grid search feature will be ready]
-///
-In the 'set_hyperparameters' directory, create a sub-directory with the same tag that you gave in the 'config.yaml' file.
-Inside this directory, create a file named 'hyperparameters.json'. This file should contain a dictionnary, containing a dictionnary of the set of hyperparameters you want the different method to be built with. 
-For example : 
-{"binning": {"n_bins" : 10, "n_neighs" : 0},
-"XGB" : {"n_estimators" : 80, "gamma" : 0, "max_depth" : 3, "learning_rate" : 0.075, "subsample" : 1, "early_stopping_rounds" : 10}}
+[Hyperparameters]
 
-Please give as many sets as different method you want to train.
-///
+The hyperparameters of the models are fine-tuned by the workflow itself: one run of 'Fine_tuning.py' is carried out
+per point of the grid given in the 'models'/'grid_file' file, and 'Gather_fine_tuning.py' then keeps, for each model,
+the set of hyperparameters giving the best value of the metric given in the 'models'/'selection_metric' section. The
+chosen sets are written in 'set_hyperparameters/{tag}/{sample}/{topology}/hyperparameters.json' and are the ones the
+final training uses. Nothing has to be written by hand: to change the hyperparameters that are scanned, change the
+grid file.
 
 Once all the above steps are completed, you are ready to run the analysis.
 To run a complete analysis, including samples creation, model training, metrics evaluation and plotting, enter the following command in your terminal: 
@@ -64,11 +81,13 @@ snakemake all --cores 8  (--use-conda  (only if you use conda))
 This runs every sample found in the input directories, for every topology listed in the config file.
 To run a single sample/topology combination, you can also ask for one output file directly, for example:
 
-snakemake saved_figures/{tag}/{sample}/{topology}/custom_{Dim}D/metrics.json --cores 8  (--use-conda  (only if you use conda))
+snakemake saved_metrics/{tag}/{sample}/{topology}/custom_{Dim}D/metrics.json --cores 8  (--use-conda  (only if you use conda))
 
 where {tag} is the tag given in the 'output'/'tag' section, {sample} is the relative path of the sample (ex : FHC/numu/H2O),
 {topology} is one of the topologies listed in the 'analysis'/'topologies' section (ex : CC0pi) and {Dim} is the number of
 dimensions given in the 'dimensions'/'dim' section of the 'config.yaml' file.
+The metrics are written by 'Calc_Metrics.py' in 'saved_metrics', and the plots by 'Make_plots.py' in 'saved_figures':
+asking for one of them does not run the other.
 Once finished, you can explore the different 'saved' folders containing the samples, models, metrics and plots.
 
 Note on dry runs ('snakemake all -n'): the topology counting is a snakemake checkpoint, which means the jobs
@@ -98,11 +117,21 @@ reweighted original sample matches the sum of the pre-weights of the target samp
 [Samples]
 
 The samples are created once per sample and topology by 'Init.py', which splits the events into a training, a
-validation and a test sample and writes them for every analysis parameter ('all'), and for the '8D' and '3D'
-parameter sets. The indices of the split are saved next to them, in 'split_indices.json'. The samples holding the
-parameters the models are trained on ('parameters'/'reweighting') are then obtained by 'Splitting_script.py',
-which simply keeps the corresponding columns of the 'all' samples: the input files are only ever read once, and
-the split is never recomputed.
+validation and a test sample and writes them for every analysis parameter (the 'all' set) and for every set listed
+in the 'parameters'/'metric_sets' section of the config file, each in a sub-directory named after the set. The
+indices of the split are saved next to them, in 'split_indices.json'. The samples holding the parameters the models
+are trained on ('parameters'/'reweighting') are then obtained by 'Splitting_script.py', which simply keeps the
+corresponding columns of the 'all' samples: the input files are only ever read once, and the split is never
+recomputed.
+
+[Input files]
+
+'Clean_input_tree.py' strips the input ROOT files of everything but the directories that are needed, for both the
+GENIE files (which keep the '2024NoGSF' directory) and the NEUT files (which keep 'BANFF_PRE' and require
+'BANFF_POST' to be present as well), for example :
+
+python Clean_input_tree.py GENIE_files GENIE_clean --keep-dir 2024NoGSF
+python Clean_input_tree.py NEUT_files NEUT_clean --keep-dir BANFF_PRE --require-dir BANFF_POST
 
 
 

@@ -240,7 +240,7 @@ rule initialize_analysis:
         samples_dir=INIT_SAMPLES_DIR
 
     output:
-        samples_dirs=expand(directory(INIT_SAMPLES_DIR + "{param_set}/"), param_set=INIT_SETS, allow_missing=True),
+        samples_dirs=directory(expand(INIT_SAMPLES_DIR + "{param_set}/", param_set=INIT_SETS, allow_missing=True)),
         last_sampled_files=expand(INIT_SAMPLES_DIR + "{param_set}/target_test.csv", param_set=INIT_SETS, allow_missing=True),
         split_indices=INIT_SAMPLES_DIR + "split_indices.json"
 
