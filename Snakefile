@@ -337,17 +337,15 @@ rule aggregate_bootstrap_all:
 
 rule custom_dim_analysis:
     input:
-        original_file=original_file_for,
-        target_file=target_file_for,
-        split_indices=INIT_SAMPLES_DIR + "split_indices.json"
+        # The samples holding every analysis parameter are already split by 'initialize_analysis':
+        # the parameters of interest are simply kept from them, so that the events of a given sample
+        # are exactly the ones the initialisation put in it.
+        # The last sample written by the initialisation is requested alongside its directory, as the
+        # timestamp of a directory does not follow the files it holds: it is not passed to the script.
+        init_samples_dir=INIT_SAMPLES_DIR + "all/",
+        last_init_sampled_file=INIT_SAMPLES_DIR + "all/target_test.csv"
 
     params:
-        modes=MODES,
-        original_tree=config["inputs"]["original_tree"],
-        target_tree=config["inputs"]["target_tree"],
-        # neutrino_PDG=config["analysis"]["neutrino_PDG"],
-        branches=config["inputs"]["branches"],
-        analysis_params=config["parameters"]["all"],
         parameters_interest=config["parameters"]["reweighting"],
         tag=config["output"]["tag"]
 
@@ -359,15 +357,7 @@ rule custom_dim_analysis:
     shell:
         """
         python Splitting-script.py \
-            --input_file_original {input.original_file} \
-            --input_file_target {input.target_file} \
-            --input_tree_original {params.original_tree} \
-            --input_tree_target {params.target_tree} \
-            --split_indices {input.split_indices} \
-            --branches {params.branches} \
-            --analysis_params {params.analysis_params} \
-            --modes {params.modes} \
-            --topologies {wildcards.topology} \
+            --init_samples_dir {input.init_samples_dir} \
             --parameters_interest {params.parameters_interest} \
             --samples_dir {output.samples_dir}
         """

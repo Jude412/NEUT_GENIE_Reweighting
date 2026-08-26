@@ -52,7 +52,7 @@ def train_XGB(original_train, original_val, target_train, target_val,
     norm_ratio_train = target_train_weight.sum() / original_train_weight.sum()
     norm_ratio_val = target_val_weight.sum() / original_val_weight.sum()
     if abs((norm_ratio_train/norm_ratio_val) - 1) > 0.01:
-        print(f"Warning: the normalisation ratio between original and target distributions differs by a factor of {abs((norm_ratio_train/norm_ratio_val) - 1)} between the training and validation samples.")
+        print(f"Warning: the normalisation ratio between original and target distributions differs by {abs((norm_ratio_train/norm_ratio_val) - 1):.1%} between the training and validation samples.")
 
     # --- balance classes for training only (does not touch the ratio above) ---
     original_train_weight_bal = original_train_weight * norm_ratio_train
@@ -66,10 +66,14 @@ def train_XGB(original_train, original_val, target_train, target_val,
     Y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
     W_val = np.concatenate((original_val_weight_bal, target_val_weight))
 
-    # Need weights of order 1 for XGB. Since this is only training shape, can just rescale the weights. 
-    weight_scale = np.median(W_train)
-    if not np.isfinite(weight_scale) or weight_scale == 0:
-        weight_scale = 1.0
+    # Need weights of order 1 for XGB. Since this is only training shape, can just rescale the weights.
+    # The median is taken over the events carrying a weight, so that a sample in which more than half of
+    # the events have a null weight does not give a null (or non-finite) scale.
+    positive_weights = W_train[W_train > 0]
+    weight_scale = np.median(positive_weights) if positive_weights.size > 0 else 1.
+    if not np.isfinite(weight_scale) or weight_scale <= 0:
+        print("Warning: the weights of the training sample give no usable scale: they are left untouched.")
+        weight_scale = 1.
     W_train /= weight_scale
     W_val /= weight_scale
 
@@ -88,9 +92,19 @@ def train_XGB(original_train, original_val, target_train, target_val,
     bst.norm_ratio = norm_ratio_train
     return bst
 
+def best_iteration_of(model):
+    """Return the index of the boosting iteration the predictions of a model are taken at.
+
+    'best_iteration' is only defined by XGBoost when early stopping is used, so the last iteration
+    of the model is returned when it was trained without 'early_stopping_rounds'."""
+    best_iteration = getattr(model, "best_iteration", None)
+    if best_iteration is None:
+        best_iteration = model.get_booster().num_boosted_rounds() - 1
+    return best_iteration
+
 def predict_XGB(original, model):
     """This function uses the trained model to return the weights used for the reweighting process."""
-    predictions = model.predict_proba(original, iteration_range=(0, model.best_iteration + 1))
+    predictions = model.predict_proba(original, iteration_range=(0, best_iteration_of(model) + 1))
     p = np.clip(predictions[:, 1], 1e-7, 1 - 1e-7)
     shape_weights = p / (1 - p) # Weights for shape matching
     weights = shape_weights * model.norm_ratio # Weights for shape and normalization matching
