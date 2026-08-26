@@ -51,9 +51,9 @@ if __name__ == "__main__":
                 hyperparams = {"n_bins": 12, "n_neighs": 0}
 
             model = train_binning(original_train, target_train, hyperparams["n_bins"], hyperparams["n_neighs"], original_train_weight=original_train_weight, target_train_weight=target_train_weight)
-            weights_train = predict_binning(model, original_train, original_weight=original_train_weight)
-            weights_val = predict_binning(model, original_val, original_weight=original_val_weight)
-            weights_test = predict_binning(model, original_test, original_weight=original_test_weight)
+            weights_train = predict_binning(model, original_train)
+            weights_val = predict_binning(model, original_val)
+            weights_test = predict_binning(model, original_test)
 
         elif model_name == 'XGB':
             if args.hparams_dict is not None:

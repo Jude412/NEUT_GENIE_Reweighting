@@ -8,27 +8,28 @@ import pandas as pd
 from hep_ml import reweight
 from xgboost import XGBClassifier
 
-
 def train_binning(original_train, target_train, n_bins, n_neighbours, original_train_weight=None, target_train_weight=None):
-    """This function trains the binning reweighter given as arguments the training data, the number of bins and neighbours, 
-    and the weights of the two distributions if they are given as arguments, otherwise it will assume that they are all 1s. 
-    The output is the trained model."""
+    """This function trains the binning reweighter given as arguments the training data, the number of bins
+    and neighbours, and the pre-weights of the two distributions if they are given as arguments, otherwise it
+    will assume that they are all 1s. The output is the trained model, carrying the normalisation ratio between
+    the pre-weighted target and the pre-weighted original training samples."""
     if original_train_weight is None:
-        original_train_weight = np.ones(original_train.shape[0])/original_train.shape[0]
+        original_train_weight = np.ones(original_train.shape[0])
     if target_train_weight is None:
-        target_train_weight = np.ones(target_train.shape[0])/target_train.shape[0]
+        target_train_weight = np.ones(target_train.shape[0])
+
     model = reweight.BinsReweighter(n_bins=n_bins, n_neighs=n_neighbours)
-    model.fit(original_train, target_train,
-              original_train_weight/np.sum(original_train_weight),
-              target_train_weight/np.sum(target_train_weight))
+    model.fit(original_train, target_train, original_train_weight, target_train_weight)
+
+    shape_weights = model.predict_weights(original_train)
+    model.norm_ratio = np.sum(target_train_weight) / np.sum(original_train_weight * shape_weights)
     return model
 
-def predict_binning(model, original_val, original_weight=None):
-    """This function returns the weights predicted by the binning reweighter given as argument
-    the scaling is already included in the output, and is given by the ratio of the number of events in the two """
-    weights = model.predict_weights(original_val, original_weight/np.sum(original_weight) if original_weight is not None else None)
-    reweighting_scale = 1 / np.sum(weights)
-    return weights * reweighting_scale
+def predict_binning(model, original):
+    """This function returns the multiplier taking the pre-weighted original distribution to the
+    pre-weighted target distribution. The pre-weights are not included in the output: multiply by them
+    to get the absolute weights."""
+    return model.predict_weights(original) * model.norm_ratio
 
 def train_XGB(original_train, original_val, target_train, target_val, 
               hparams = {"n_estimators": 100,
@@ -64,6 +65,11 @@ def train_XGB(original_train, original_val, target_train, target_val,
     X_val = np.concatenate((original_val, target_val), axis=0)
     Y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
     W_val = np.concatenate((original_val_weight_bal, target_val_weight))
+
+    # Need weights of order 1 for XGB. Since this is only training shape, can just rescale the weights. 
+    weight_scale = np.mean(W_train)
+    W_train /= weight_scale
+    W_val /= weight_scale
 
     bst = XGBClassifier(objective='binary:logistic',
                     eval_metric=['auc', 'logloss'],
