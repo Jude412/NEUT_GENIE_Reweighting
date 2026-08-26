@@ -68,6 +68,8 @@ def train_XGB(original_train, original_val, target_train, target_val,
 
     # Need weights of order 1 for XGB. Since this is only training shape, can just rescale the weights. 
     weight_scale = np.median(W_train)
+    if not np.isfinite(weight_scale) or weight_scale == 0:
+        weight_scale = 1.0
     W_train /= weight_scale
     W_val /= weight_scale
 

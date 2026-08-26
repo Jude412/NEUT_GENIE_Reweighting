@@ -7,7 +7,6 @@ They are saved as csv files in a specified directory. The script can be run from
 #imports 
 from ROOT_file_conv import convert_input_file
 from Sample_io import save_sample, create_samples
-from split_sizes import minimum_events
 import argparse
 import os
 import json

@@ -104,7 +104,7 @@ if __name__ == "__main__":
 
     # Save the split indices to a JSON file
     with open(args.indices_file, "w") as f:
-        json.dump(split_indices, f, indent=4)
+        json.dump(split_indices, f, indent=0)
 
     save_sample(os.path.join(args.output_dir_samples_all, "original_train.csv"), original_train, original_train_w, args.analysis_params)
     save_sample(os.path.join(args.output_dir_samples_all, "original_val.csv"), original_val, original_val_w, args.analysis_params)
