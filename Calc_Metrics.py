@@ -23,10 +23,6 @@ def binning_of(param, binning_dict, default_n_bins=30):
         return binning_dict[param]["x_min"], binning_dict[param]["x_max"], binning_dict[param]["n_bins"]
     return None, None, default_n_bins
 
-def degrees_of_freedom(params, binning_dict):
-    """Return the number of degrees of freedom of the Chi2 of a set of parameters."""
-    return sum(binning_of(param, binning_dict)[2] - 1 for param in params)
-
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description='Evaluate the performance of the reweighting methods.')
     argparser.add_argument('--sample_dir', action='append', nargs=2, required=True, metavar=('NAME', 'PATH'),
