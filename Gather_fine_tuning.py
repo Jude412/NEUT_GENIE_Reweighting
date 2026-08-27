@@ -78,9 +78,14 @@ if __name__ == "__main__":
             raise ValueError(f"No hyperparameter grid given for the model '{model}' in {args.grid_file}. "
                              f"The grids given are those of {list(grids)}.")
 
-        metrics_files = sorted(glob.glob(os.path.join(args.input_dir, model, "run_*_metrics.csv")))
-        best_hyperparameters_of_models[model] = best_hyperparameters(metrics_files, grid_of(grids[model])[0],
-                                                                    metric, direction)
+        grid = grid_of(grids[model])
+        metrics_files = [
+            os.path.join(args.input_dir, model, f"run_{run_id}_metrics.csv")
+            for run_id in range(len(grid))
+        ]
+        best_hyperparameters_of_models[model] = best_hyperparameters(
+            metrics_files, grid[0], metric, direction
+        )
         print(f"Best hyperparameter set of the model {model} ({direction} {metric}): "
               f"{best_hyperparameters_of_models[model]}")
 
