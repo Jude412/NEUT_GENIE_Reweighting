@@ -136,7 +136,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
 
             if add_chi2:
                 for key in weights_dict.keys():
-                    chi2, dof = chi2_hist_axis(original, target, weights_dict[key], i, target_weights, n_bins= 30, x_min=x_min, x_max=x_max)
+                    chi2, dof = chi2_hist_axis(original, target, weights_dict[key], i, target_weights, n_bins=n_bins, x_min=x_min, x_max=x_max)
                     chi2_values[key] = chi2/dof if dof > 0 else 0
 
             # if text_str != "WD- \nChi2-":
