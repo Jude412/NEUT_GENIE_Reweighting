@@ -126,17 +126,9 @@ if __name__ == "__main__":
 
     hparams_metrics_merged = {**hyperparams, **metrics}
     df_row = pd.DataFrame([hparams_metrics_merged])
-    csv_path = os.path.join(args.logdir, "Hyperparameters_metrics.csv")
-    csv_2_path = args.output_file
-
-    if not os.path.isfile(csv_path):
-        df_row.to_csv(csv_path, index=False)
+    if not os.path.isfile(args.output_file):
+        df_row.to_csv(args.output_file, index=False)
     else:
-        df_row.to_csv(csv_path, mode='a', header=False, index=False)
-
-    if not os.path.isfile(csv_2_path):
-        df_row.to_csv(csv_2_path, index=False)
-    else:
-        df_row.to_csv(csv_2_path, mode='a', header=False, index=False)
+        df_row.to_csv(args.output_file, mode='a', header=False, index=False)
 
     print(f"Run with hyperparameters : {hyperparams} is done.")

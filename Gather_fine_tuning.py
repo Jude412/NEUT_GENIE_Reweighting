@@ -1,9 +1,9 @@
 """Pick, for every model, the hyperparameter set giving the best metric of the fine-tuning runs.
 
-The hyperparameters and metrics of every run are gathered by 'Fine_tuning.py' in a
-'{model}/Hyperparameters_metrics.csv' file. This script reads them, keeps the row giving the
-best value of the metric the model is selected on, and writes the hyperparameters of that row
-as the json file the final training uses.
+The hyperparameters and metrics of every run are written by 'Fine_tuning.py' in
+'{model}/run_*_metrics.csv' files. This script reads them, keeps the row giving the best value
+of the metric the model is selected on, and writes the hyperparameters of that row as the json
+file the final training uses.
 
 The hyperparameter names are read from the grid file rather than hard-coded, so that changing
 the grid of a model is enough to change the hyperparameters that are scanned and selected."""
@@ -13,6 +13,7 @@ from List_hyperparameters import grid_of
 import argparse
 import json
 import os
+import glob
 import pandas as pd
 
 def cast_like(value, reference):
@@ -29,21 +30,24 @@ def cast_like(value, reference):
         return float(value)
     return type(reference)(value)
 
-def best_hyperparameters(metrics_file, grid_point, metric, direction):
+def best_hyperparameters(metrics_files, grid_point, metric, direction):
     """Return the hyperparameters of the run giving the best value of the given metric.
 
     'grid_point' is any point of the grid of the model: it gives the names of its
     hyperparameters and the type their values are given with."""
-    runs = pd.read_csv(metrics_file)
+    if not metrics_files:
+        raise ValueError("No fine-tuning metrics files found.")
+
+    runs = pd.concat([pd.read_csv(metrics_file) for metrics_file in metrics_files], ignore_index=True)
 
     if metric not in runs.columns:
         raise ValueError(f"The metric '{metric}' the best hyperparameter set is picked with was not "
-                         f"found in {metrics_file}, which holds {list(runs.columns)}.")
+                         f"found in {metrics_files}, which holds {list(runs.columns)}.")
 
     missing = [name for name in grid_point if name not in runs.columns]
     if missing:
         raise ValueError(f"The hyperparameters {missing} of the grid file were not found in "
-                         f"{metrics_file}, which holds {list(runs.columns)}.")
+                         f"{metrics_files}, which holds {list(runs.columns)}.")
 
     if direction == "min":
         best_run = runs.loc[runs[metric].idxmin()]
@@ -74,9 +78,9 @@ if __name__ == "__main__":
             raise ValueError(f"No hyperparameter grid given for the model '{model}' in {args.grid_file}. "
                              f"The grids given are those of {list(grids)}.")
 
-        metrics_file = os.path.join(args.input_dir, model, "Hyperparameters_metrics.csv")
-        best_hyperparameters_of_models[model] = best_hyperparameters(metrics_file, grid_of(grids[model])[0],
-                                                                     metric, direction)
+        metrics_files = sorted(glob.glob(os.path.join(args.input_dir, model, "run_*_metrics.csv")))
+        best_hyperparameters_of_models[model] = best_hyperparameters(metrics_files, grid_of(grids[model])[0],
+                                                                    metric, direction)
         print(f"Best hyperparameter set of the model {model} ({direction} {metric}): "
               f"{best_hyperparameters_of_models[model]}")
 
