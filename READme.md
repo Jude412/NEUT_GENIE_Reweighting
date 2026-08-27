@@ -84,8 +84,8 @@ To run a single sample/topology combination, you can also ask for one output fil
 snakemake saved_metrics/{tag}/{sample}/{topology}/custom_{Dim}D/metrics.json --cores 8  (--use-conda  (only if you use conda))
 
 where {tag} is the tag given in the 'output'/'tag' section, {sample} is the relative path of the sample (ex : FHC/numu/H2O),
-{topology} is one of the topologies listed in the 'analysis'/'topologies' section (ex : CC0pi) and {Dim} is the number of
-dimensions given in the 'dimensions'/'dim' section of the 'config.yaml' file.
+ {topology} is one of the topologies listed in the 'analysis'/'topologies' section (ex : CC0pi), and {Dim} is the number
+of parameters listed in the 'parameters'/'reweighting' section of the 'config.yaml' file.
 The metrics are written by 'Calc_Metrics.py' in 'saved_metrics', and the plots by 'Make_plots.py' in 'saved_figures':
 asking for one of them does not run the other.
 Once finished, you can explore the different 'saved' folders containing the samples, models, metrics and plots.

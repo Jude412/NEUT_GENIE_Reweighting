@@ -70,7 +70,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                 x_min = dict_binning[var]["x_min"]
                 x_max = dict_binning[var]["x_max"]
                 n_bins = dict_binning[var]["n_bins"]
-                bins = np.linspace(x_min, x_max, n_bins)
+                bins = np.linspace(x_min, x_max, n_bins+1)
             else:
                 x_min = None
                 x_max = None
@@ -291,13 +291,14 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         cmap.set_bad(color='white')
 
                         # symmetric color scale around 1
-                        delta = np.max(np.abs(ratio_masked - 1))
+                        ratio_delta = ratio_masked - 1
+                        delta = np.max(np.abs(ratio_delta))
                         vmin, vmax = -delta, delta
 
                         fig, ax = plt.subplots(figsize=(8, 8))
 
                         im = ax.imshow(
-                            ratio_masked.T,
+                            ratio_delta.T,
                             origin='lower',
                             aspect='auto',
                             extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
@@ -330,7 +331,7 @@ def plot_training_history(model, output_file, title="Training history"):
         fig, ax = plt.subplots()
         ax.plot(training_history["validation_0"]["logloss"], label='Train Log Loss')
         ax.plot(training_history["validation_1"]["logloss"], label='Validation Log Loss')
-        ax.set_xlabel('Epoch')
+        ax.set_xlabel('Boosting Iteration')
         ax.set_ylabel('Log Loss')
         ax.set_title(title)
         ax.legend()
