@@ -64,11 +64,16 @@ def chi2_hist_naxis(original, target, rw_weights, binning_dict, target_weights =
         dof += dof_val
     return chi2, dof
 
-def chi2_dof(original, target, weights_dict, binning_dict, target_weights = None, list_param_interest = ["Enu_true", "Plep", "CosLep"]):
+def chi2_dof(original, target, weights_dict, binning_dict, target_weights = None,
+             list_param_interest = ["Enu_true", "Plep", "CosLep"], return_chi2_and_dof=False):
     dict_chi2 = {}
+    dict_chi2_and_dof = {}
     for key in weights_dict.keys():
         chi2, dof = chi2_hist_naxis(original, target, weights_dict[key], binning_dict, target_weights, list_param_interest)
+        dict_chi2_and_dof[key] = (chi2, dof)
         dict_chi2[key] = chi2 / dof if dof > 0 else 0
+    if return_chi2_and_dof:
+        return dict_chi2_and_dof
     return dict_chi2
 
 def chi2_p_value(chi2, dof):

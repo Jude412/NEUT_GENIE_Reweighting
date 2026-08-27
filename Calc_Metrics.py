@@ -105,13 +105,15 @@ if __name__ == "__main__":
 
         # Chi2 of every set of parameters.
         for set_name, sample in test_samples.items():
-            chi2_of_set = chi2_dof(sample["original"], sample["target"], weights_dict,
-                                   target_weights=sample["target_weight"],
-                                   binning_dict=binning_dict, list_param_interest=sample["params"])
-            dof = degrees_of_freedom(sample["params"], binning_dict)
+            chi2_and_dof_of_set = chi2_dof(sample["original"], sample["target"], weights_dict,
+                                           target_weights=sample["target_weight"],
+                                           binning_dict=binning_dict, list_param_interest=sample["params"],
+                                           return_chi2_and_dof=True)
+            chi2_of_set = {method: chi2 / dof if dof > 0 else 0
+                           for method, (chi2, dof) in chi2_and_dof_of_set.items()}
             metrics_dict[f'chi2_{set_name}'] = chi2_of_set
-            metrics_dict[f'chi2_{set_name}_p_value'] = {method: chi2_p_value(chi2*dof, dof)
-                                                        for method, chi2 in chi2_of_set.items()}
+            metrics_dict[f'chi2_{set_name}_p_value'] = {method: chi2_p_value(chi2, dof)
+                                                        for method, (chi2, dof) in chi2_and_dof_of_set.items()}
 
     if args.compute_swd:
         for set_name, sample in test_samples.items():
