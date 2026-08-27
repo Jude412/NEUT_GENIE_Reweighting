@@ -333,8 +333,9 @@ rule custom_dim_analysis:
         """
 
 rule prepare_hps:
+    input:
+        grid_file=GRID_FILE
     params:
-        grid_file=GRID_FILE,
         models=MODELS
     output:
         hps_files=HPS_FILES
@@ -343,7 +344,7 @@ rule prepare_hps:
     shell:
         """
         python List_hyperparameters.py \
-            --grid_file {params.grid_file} \
+            --grid_file {input.grid_file} \
             --models {params.models} \
             --output_dir {HPS_DIR}
         """
