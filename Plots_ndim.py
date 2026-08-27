@@ -284,7 +284,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         ratio = np.divide(hist_rw, hist_target, out=np.zeros_like(hist_rw), where=hist_target > 0)
 
                         # mask invalid bins
-                        ratio_masked = np.ma.masked_where(hist_rw == 0, ratio)
+                        ratio_masked = np.ma.masked_where(hist_target == 0, ratio)
 
                         # colormap with white for masked
                         cmap = plt.cm.coolwarm.copy()
