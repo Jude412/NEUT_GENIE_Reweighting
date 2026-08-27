@@ -240,7 +240,6 @@ rule initialize_analysis:
         samples_dir=INIT_SAMPLES_DIR
 
     output:
-        samples_dirs=directory(expand(INIT_SAMPLES_DIR + "{param_set}/", param_set=INIT_SETS, allow_missing=True)),
         last_sampled_files=expand(INIT_SAMPLES_DIR + "{param_set}/target_test.csv", param_set=INIT_SETS, allow_missing=True),
         split_indices=INIT_SAMPLES_DIR + "split_indices.json"
 
@@ -421,10 +420,10 @@ rule train_models:
         last_sampled_file=SAMPLES_DIR + "target_test.csv"
 
     params:
-        model_list=MODELS
+        model_list=MODELS,
+        model_dir=MODEL_DIR,
+        weights_dir=WEIGHTS_DIR
     output:
-        model_dir=directory(MODEL_DIR),
-        weights_dir=directory(WEIGHTS_DIR),
         save_path_dict=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
 
     conda:
@@ -434,8 +433,8 @@ rule train_models:
         python Training.py \
             --sample_dir {input.samples_dir} \
             --hparams_dict {input.hparam_file} \
-            --save_weights_path {output.weights_dir} \
-            --save_model_path {output.model_dir} \
+            --save_weights_path {params.weights_dir} \
+            --save_model_path {params.model_dir} \
             --model_list {params.model_list} \
             --save_path_dict {output.save_path_dict}
         """
@@ -485,11 +484,11 @@ rule make_plots:
         weights_path=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
 
     output:
-        output_dir=directory(FIG_DIR),
         histograms_1D=FIG_DIR + "1Dhist.pdf"
 
     params:
-        binning_file=config["parameters"]["binning_file"]
+        binning_file=config["parameters"]["binning_file"],
+        output_dir=FIG_DIR
 
     conda:
         ENV
@@ -500,7 +499,7 @@ rule make_plots:
             --sample_dir_1D {input.sample_dir_1D} \
             --sample_dir_2D {input.sample_dir_2D} \
             --weights_paths {input.weights_path} \
-            --output_dir {output.output_dir} \
+            --output_dir {params.output_dir} \
             --make_1D_plots \
             --no-make_2D_plots \
             --binning_file {params.binning_file}
