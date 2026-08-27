@@ -3,7 +3,9 @@ Walks a source directory tree and builds a new mirrored tree made of
 symlinks, cleaned according to the rules below. Nothing in the source
 tree is touched, moved, or deleted.
 
-Expected structure at each "branch" level (the level this script targets):
+A "branch" is a directory holding the sub-directory the ROOT file to keep
+lives in (given by --keep-dir), and every sub-directory given by
+--require-dir. For example, with '--keep-dir BANFF_PRE --require-dir BANFF_POST':
 
     .../some/branch/
         BANFF_PRE/
@@ -22,8 +24,9 @@ contain only:
         something.root   (symlink)
 
 Usage:
-    python clean_NEUT_tree.py /path/to/source /path/to/destination
-    python clean_NEUT_tree.py /path/to/source /path/to/destination --dry-run
+    python Clean_input_tree.py /path/to/source /path/to/destination --keep-dir 2024NoGSF
+    python Clean_input_tree.py /path/to/source /path/to/destination --keep-dir BANFF_PRE --require-dir BANFF_POST
+    python Clean_input_tree.py /path/to/source /path/to/destination --keep-dir 2024NoGSF --dry-run
 """
 
 import argparse
@@ -31,17 +34,17 @@ import os
 import sys
 from pathlib import Path
 
-# Pattern used to find the root file to keep inside BANFF_PRE.
+# Pattern used to find the root file to keep inside the kept sub-directory.
 ROOT_FILE_GLOB = "*.root"
 
-def find_branch_dirs(src_root: Path):
+def find_branch_dirs(src_root: Path, keep_dir: str, require_dirs):
     """Yield every directory in src_root that looks like a 'branch':
-    i.e. it directly contains both a BANFF_PRE and a BANFF_POST subdirectory.
+    i.e. it directly contains the kept sub-directory and every required one.
     """
+    needed = [keep_dir] + list(require_dirs)
     for dirpath, dirnames, _filenames in os.walk(src_root):
-        if "BANFF_PRE" in dirnames and "BANFF_POST" in dirnames:
+        if all(name in dirnames for name in needed):
             yield Path(dirpath)
-            # Don't bother descending into BANFF_PRE/BANFF_POST/etc,
             # nothing below a branch needs separate handling.
             dirnames[:] = []
 
@@ -57,18 +60,18 @@ def make_symlink(link_path: Path, target_path: Path, dry_run: bool):
     link_path.symlink_to(target_path)
 
 
-def process_branch(branch_src: Path, src_root: Path, dst_root: Path, dry_run: bool):
+def process_branch(branch_src: Path, src_root: Path, dst_root: Path, keep_dir: str, dry_run: bool):
     rel = branch_src.relative_to(src_root)
     branch_dst = dst_root / rel
 
-    pre_src = branch_src / "BANFF_PRE"
-    root_files = sorted(pre_src.glob(ROOT_FILE_GLOB))
+    keep_src = branch_src / keep_dir
+    root_files = sorted(keep_src.glob(ROOT_FILE_GLOB))
 
     if not root_files:
-        print(f"  WARNING: no root file found in {pre_src}, skipping this branch")
+        print(f"  WARNING: no root file found in {keep_src}, skipping this branch")
         return
     if len(root_files) > 1:
-        print(f"  WARNING: multiple root files found in {pre_src}, keeping all of them")
+        print(f"  WARNING: multiple root files found in {keep_src}, keeping all of them")
 
     for root_file in root_files:
         # Use resolve() so the symlink target is an absolute, real path,
@@ -81,9 +84,23 @@ def process_branch(branch_src: Path, src_root: Path, dst_root: Path, dry_run: bo
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", type=Path, help="Path to the existing directory tree")
     parser.add_argument("destination", type=Path, help="Path to the new (cleaned) tree to create")
+    parser.add_argument(
+        "--keep-dir",
+        required=True,
+        help="Name of the sub-directory of a branch holding the ROOT file to keep "
+             "(ex: '2024NoGSF' for the GENIE tree, 'BANFF_PRE' for the NEUT one)",
+    )
+    parser.add_argument(
+        "--require-dir",
+        action="append",
+        default=[],
+        help="Name of a sub-directory a branch must also hold to be cleaned (ex: 'BANFF_POST'). "
+             "Can be given several times. The ROOT files it holds are not kept.",
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
@@ -107,9 +124,9 @@ def main():
         dst_root.mkdir(parents=True, exist_ok=True)
 
     branch_count = 0
-    for branch_src in find_branch_dirs(src_root):
+    for branch_src in find_branch_dirs(src_root, args.keep_dir, args.require_dir):
         print(f"Branch: {branch_src}")
-        process_branch(branch_src, src_root, dst_root, args.dry_run)
+        process_branch(branch_src, src_root, dst_root, args.keep_dir, args.dry_run)
         branch_count += 1
 
     print(f"\nDone. Processed {branch_count} branch director{'y' if branch_count == 1 else 'ies'}.")

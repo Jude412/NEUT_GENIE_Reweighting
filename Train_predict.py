@@ -3,10 +3,19 @@ This will assume that the input data is given as numpy arrays, already sorted in
 The output will be the trained model, which can be used to predict the weights."""
 
 #imports 
+import json
 import numpy as np
-import pandas as pd
 from hep_ml import reweight
 from xgboost import XGBClassifier
+
+# The reweighting models that can be trained, with the hyperparameters they are trained with when
+# none are given.
+DEFAULT_HYPERPARAMETERS = {
+    "binning": {"n_bins": 12, "n_neighs": 0},
+    "XGB": {"n_estimators": 100, "learning_rate": 0.05, "max_depth": 3, "gamma": 2,
+            "subsample": 0.3, "early_stopping_rounds": 10},
+}
+MODEL_NAMES = tuple(DEFAULT_HYPERPARAMETERS)
 
 def train_binning(original_train, target_train, n_bins, n_neighbours, original_train_weight=None, target_train_weight=None):
     """This function trains the binning reweighter given as arguments the training data, the number of bins
@@ -58,34 +67,34 @@ def train_XGB(original_train, original_val, target_train, target_val,
     original_train_weight_bal = original_train_weight * norm_ratio_train
     original_val_weight_bal = original_val_weight * norm_ratio_val
 
-    X_train = np.concatenate((original_train, target_train), axis=0)
-    Y_train = np.concatenate((np.zeros(len(original_train)), np.ones(len(target_train))), axis=0)
-    W_train = np.concatenate((original_train_weight_bal, target_train_weight))
+    x_train = np.concatenate((original_train, target_train), axis=0)
+    y_train = np.concatenate((np.zeros(len(original_train)), np.ones(len(target_train))), axis=0)
+    w_train = np.concatenate((original_train_weight_bal, target_train_weight))
 
-    X_val = np.concatenate((original_val, target_val), axis=0)
-    Y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
-    W_val = np.concatenate((original_val_weight_bal, target_val_weight))
+    x_val = np.concatenate((original_val, target_val), axis=0)
+    y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
+    w_val = np.concatenate((original_val_weight_bal, target_val_weight))
 
     # Need weights of order 1 for XGB. Since this is only training shape, can just rescale the weights.
     # The median is taken over the events carrying a weight, so that a sample in which more than half of
     # the events have a null weight does not give a null (or non-finite) scale.
-    positive_weights = W_train[W_train > 0]
+    positive_weights = w_train[w_train > 0]
     weight_scale = np.median(positive_weights) if positive_weights.size > 0 else 1.
     if not np.isfinite(weight_scale) or weight_scale <= 0:
         print("Warning: the weights of the training sample give no usable scale: they are left untouched.")
         weight_scale = 1.
-    W_train /= weight_scale
-    W_val /= weight_scale
+    w_train /= weight_scale
+    w_val /= weight_scale
 
     bst = XGBClassifier(objective='binary:logistic',
                     eval_metric=['auc', 'logloss'],
                     **hparams)
 
     bst.fit(
-        X_train, Y_train,
-        sample_weight = W_train,
-        eval_set=[(X_train, Y_train), (X_val, Y_val)],
-        sample_weight_eval_set=[W_train, W_val],
+        x_train, y_train,
+        sample_weight = w_train,
+        eval_set=[(x_train, y_train), (x_val, y_val)],
+        sample_weight_eval_set=[w_train, w_val],
         verbose=False
     )
 
@@ -109,3 +118,55 @@ def predict_XGB(original, model):
     shape_weights = p / (1 - p) # Weights for shape matching
     weights = shape_weights * model.norm_ratio # Weights for shape and normalization matching
     return weights
+
+
+def check_model(model_name):
+    """Raise if the given model is not one of the models that can be trained."""
+    if model_name not in MODEL_NAMES:
+        raise ValueError(f"Invalid model choice '{model_name}'. Please choose from {list(MODEL_NAMES)}.")
+
+def hyperparameters_of(model_name, hyperparameters_file=None):
+    """Return the hyperparameters a model is to be trained with.
+
+    They are read from the given json file, which holds either the hyperparameters of the model
+    itself (as written by 'List_hyperparameters.py') or the {model: hyperparameters} dictionary of
+    several models (as written by 'Gather_fine_tuning.py'). The default hyperparameters of the
+    model are used when no file is given."""
+    check_model(model_name)
+    if hyperparameters_file is None:
+        return dict(DEFAULT_HYPERPARAMETERS[model_name])
+
+    with open(hyperparameters_file) as f:
+        hyperparameters = json.load(f)
+    return dict(hyperparameters.get(model_name, hyperparameters))
+
+def train_model(model_name, samples, hyperparameters):
+    """Train a model on the samples loaded by 'Sample_io.load_samples'.
+
+    The dispatch between the models lives here, so that every script trains them the same way."""
+    check_model(model_name)
+    original_train, original_train_weight = samples["original_train"]
+    original_val, original_val_weight = samples["original_val"]
+    target_train, target_train_weight = samples["target_train"]
+    target_val, target_val_weight = samples["target_val"]
+
+    if model_name == "binning":
+        return train_binning(original_train, target_train,
+                             hyperparameters["n_bins"], hyperparameters["n_neighs"],
+                             original_train_weight=original_train_weight,
+                             target_train_weight=target_train_weight)
+
+    return train_XGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
+                     original_train_weight=original_train_weight, original_val_weight=original_val_weight,
+                     target_train_weight=target_train_weight, target_val_weight=target_val_weight)
+
+def predict_model(model_name, model, original):
+    """Return the weights a trained model gives to a distribution.
+
+    They are the multipliers taking the pre-weighted original distribution to the pre-weighted
+    target one: multiply them by the pre-weights of the events to get their absolute weights."""
+    check_model(model_name)
+    if model_name == "binning":
+        return predict_binning(model, original)
+
+    return predict_XGB(original, model)

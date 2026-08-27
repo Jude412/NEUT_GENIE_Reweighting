@@ -7,9 +7,14 @@ metrics are carried out on the weighted events without ever using the weight its
 
 #imports
 import numpy as np
+import os
 
 # Name of the column holding the total weight of the events in the sample csv files.
 WEIGHT_COLUMN = "PreWeight"
+
+# The samples every set of parameters is split into, as they are named on disk.
+SAMPLE_NAMES = ("original_train", "original_val", "original_test",
+                "target_train", "target_val", "target_test")
 
 def sample_columns(sample_file):
     """Return the names of the parameters stored in a sample csv file, without the weight column."""
@@ -47,17 +52,17 @@ def load_sample(sample_file):
     return data, np.ones(data.shape[0])
 
 def create_samples(distribution, split_indices, weights = None):
-    train_idx = split_indices["train"]
-    val_idx = split_indices["val"]
-    test_idx = split_indices["test"]
+    """Split a distribution into its samples, given the indices of the events of each of them.
 
-    train_sample = distribution[train_idx]
-    val_sample = distribution[val_idx]
-    test_sample = distribution[test_idx]
-    if weights is not None:
-        train_weights = weights[train_idx]
-        val_weights = weights[val_idx]
-        test_weights = weights[test_idx]
-        return train_sample, val_sample, test_sample, train_weights, val_weights, test_weights
-    else:
-        return train_sample, val_sample, test_sample
+    Returns the {sample name: events} dictionary of the samples, and the {sample name: weights}
+    dictionary of the weights of their events when weights are given."""
+    samples = {name: distribution[indices] for name, indices in split_indices.items()}
+    if weights is None:
+        return samples
+
+    sample_weights = {name: weights[indices] for name, indices in split_indices.items()}
+    return samples, sample_weights
+
+def load_samples(sample_dir):
+    """Load every sample of a directory and return the {sample name: (events, weights)} dictionary."""
+    return {name: load_sample(os.path.join(sample_dir, f"{name}.csv")) for name in SAMPLE_NAMES}

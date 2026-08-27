@@ -1,234 +1,132 @@
-"""The goal of this script is to evaluate the performance of the different reweighting methods. 
-The idea is to have functions that take as input the original and target distributions, and the predicted weights of any
-method and return : 1D and 2D histograms with ratio of reweighting data over target, a Chi2 statistics, a SWD value and the associated p-value.
-We are here trying to implement it with n-dimensional distributions, for which we assume the weights have already been predicted."""
+"""The goal of this script is to evaluate the performance of the different reweighting methods.
+
+It takes the test samples of every set of analysis parameters, the weights predicted for them by every
+reweighting method, and writes a json file holding the Chi2 statistics, the SWD values and the associated
+p-values of every method in every set. The plots displaying those distributions are made by 'Make_plots.py'.
+
+A parameter set is given as '--sample_dir NAME path', and as many sets as wanted can be given: the metrics
+of each of them are written under a key named after the set."""
 
 #imports
 import os
 
-from Metrics_ndim import chi2_hist_axis, plot_histograms, plot_2D_histogram, chi2_dof, compute_swd, compute_p_value, chi2_p_value
-from Sample_io import load_sample
+from Metrics_ndim import chi2_hist_axis, chi2_dof, compute_swd, compute_p_value, chi2_p_value
+from Param_sets import ALL_PARAMS_SET, named_paths_from_args
+from Sample_io import load_sample, sample_columns
 import numpy as np
 import argparse
 import json
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-import pickle
+
+def binning_of(param, binning_dict, default_n_bins=30):
+    """Return the (x_min, x_max, n_bins) binning of a parameter, defaulting to an automatic one."""
+    if param in binning_dict:
+        return binning_dict[param]["x_min"], binning_dict[param]["x_max"], binning_dict[param]["n_bins"]
+    return None, None, default_n_bins
 
 if __name__ == "__main__":
-    argparser = argparse.ArgumentParser(description='Evaluate the performance of reweighting methods.')
-    argparser.add_argument('--original_test', type=str, required=False, help='Path to the original test dataset containing all configured analysis parameters (csv).',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/original_test_all.csv')
-    argparser.add_argument('--target_test', type=str, required=False, help='Path to the target test dataset containing all configured analysis parameters (csv).',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_samples/target_test_all.csv')
+    argparser = argparse.ArgumentParser(description='Evaluate the performance of the reweighting methods.')
+    argparser.add_argument('--sample_dir', action='append', nargs=2, required=True, metavar=('NAME', 'PATH'),
+                           help='Name of a set of analysis parameters and the directory holding its samples. '
+                                f"Can be given once per set, and must be given for the '{ALL_PARAMS_SET}' set.")
+    argparser.add_argument('--swd_distribution', action='append', nargs=2, default=[], metavar=('NAME', 'PATH'),
+                           help='Name of a set of analysis parameters and the npy file holding the bootstrapped SWD '
+                                'distribution its p-values are computed with. Can be given once per set.')
     argparser.add_argument('--weights_paths', type=str, required=False,
-                           help = "path to the json file containing a dictionary with each method and path to its predicted weights (csv).",
+                           help="Path to the json file holding, for each method, the paths to its predicted weights and to its model.",
                            default='/vols/dune/jmm224/t2knova/reweighting/make_metrics.json')
-    argparser.add_argument('--output_file', type=str, required=False, help='File to save the output plots and metrics.',
-                            default='/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios')
-    argparser.add_argument('--make_1D_plots', action=argparse.BooleanOptionalAction, help='Whether to make the 1D plots or not.')
-    argparser.add_argument('--make_2D_plots', action=argparse.BooleanOptionalAction, help='Whether to make the 2D plots or not.')
+    argparser.add_argument('--output_file', type=str, required=False, help='Json file to save the metrics in.',
+                           default='/vols/dune/jmm224/t2knova/reweighting/saved_metrics/metrics.json')
     argparser.add_argument('--compute_chi2', action=argparse.BooleanOptionalAction, help='Whether to compute the Chi2 statistic or not.')
     argparser.add_argument('--compute_swd', action=argparse.BooleanOptionalAction, help='Whether to compute the SWD metric or not.')
-    argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
-    argparser.add_argument("--params_8D", nargs="+", help="List of parameters to use in 8D samples.")
-    argparser.add_argument("--params_3D", nargs="+", help="List of parameters to use in 3D samples.")
-    argparser.add_argument('--interest_params', nargs='+', required=False, help='Parameters used for the custom SWD distribution, in the format "param1,param2,...".',
-                            default = ["Enu_true", "Plep", "CosLep"])
-    argparser.add_argument('--custom_swd_distribution', type=str, required=False, help='Path to a custom SWD distribution to compute the p-value with.')
-    argparser.add_argument("--swd_distribution_3D", type=str, required=False, help="Path to the SWD distribution file or to store it.", 
-                        default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_3D_test20p.npy")
-    argparser.add_argument("--swd_distribution_8D", type=str, required=False, help="Path to the SWD distribution file or to store it.",
-                            default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_8D_test20p.npy")
-    argparser.add_argument("--swd_distribution_all", "--swd_distribution_21D", dest="swd_distribution_all", type=str, required=False, help="Path to the all-parameters SWD distribution file or to store it.",
-                            default = "/vols/dune/jmm224/t2knova/reweighting/swd_distribution/list_swd_all_test20p.npy")
     argparser.add_argument('--n_directions', type=int, default=500, help="Number of directions to draw for each bootstrap")
     argparser.add_argument("--binning_file", type=str, required=False, help="Path to the json file containing the binning information for each parameter.",
                            default="/vols/dune/jmm224/t2knova/reweighting/binnings.json")
     args = argparser.parse_args()
 
-    parameter_labels = {
-        "Enu_true": r"$E^{true}_{\nu}$ (GeV)",
-        "Plep": r"$p_{lep}$ (GeV/c)",
-        "PLep": r"$p_{lep}$ (GeV/c)",
-        "CosLep": r"$cos(\theta_{lep})$",
-        "Q2": r"$Q^2$ (GeV$^2$/c$^2$)",
-        "q0": r"$q_0$ (GeV)",
-        "q3": r"$q_3$ (GeV/c)",
-        "PTlep": r"$p^T_{lep}$ (GeV/c)",
-        "Eav": r"$E_{Av}$ (GeV)",
-        "W": r"$W$ (GeV/c$^2$)",
-        "y": "y",
-        "Mode": "Mode",
-        "Topology": "Topology",
-        "cc": "cc",
-        "hitnuc": "hitnuc",
-        "N_n": r"$N_n$",
-        "K_n": r"$K_n$ (GeV)",
-        "N_p": r"$N_p$",
-        "K_p": r"$K_p$ (GeV)",
-        "N_pi0": r"$N_{pi^0}$",
-        "K_pi0": r"$K_{pi^0}$ (GeV)",
-        "N_pip": r"$N_{pi^+}$",
-        "K_pip": r"$K_{pi^+}$ (GeV)",
-        "N_pim": r"$N_{pi^-}$",
-        "K_pim": r"$K_{pi^-}$ (GeV)"
-    }
-    
-    Index_parameters = [args.analysis_params.index(param) for param in args.interest_params]
+    sample_dirs = named_paths_from_args(args.sample_dir)
+    swd_distributions = named_paths_from_args(args.swd_distribution)
 
-    # We load the data and the weights
-    original_test, original_test_weight = load_sample(args.original_test)
-    target_test, target_test_weight = load_sample(args.target_test)
+    if ALL_PARAMS_SET not in sample_dirs:
+        raise ValueError(f"No directory given for the '{ALL_PARAMS_SET}' set of every analysis parameter, "
+                         f"which the per-parameter metrics are computed from. The sets given are {list(sample_dirs)}.")
+
+    # We load the test samples of every parameter set. They all hold the same events, only their
+    # parameters differ, so the weights predicted by a method apply to all of them.
+    test_samples = {}
+    for set_name, sample_dir in sample_dirs.items():
+        original_file = os.path.join(sample_dir, "original_test.csv")
+        original_test, original_test_weight = load_sample(original_file)
+        target_test, target_test_weight = load_sample(os.path.join(sample_dir, "target_test.csv"))
+        test_samples[set_name] = {
+            "original": original_test,
+            "original_weight": original_test_weight,
+            "target": target_test,
+            "target_weight": target_test_weight,
+            "params": sample_columns(original_file),
+        }
+
+    all_params_sample = test_samples[ALL_PARAMS_SET]
 
     with open(args.weights_paths, 'r') as f:
-        weights_path_dict = json.load(f)
-    
+        saved_paths = json.load(f)
+
+    # The trained weights take the pre-weighted original distribution to the pre-weighted target one,
+    # so they are multiplied by the pre-weights of the events to give their absolute weights.
     weights_dict = {}
-    for method, path in weights_path_dict.items():
-        # trained weights are from weighted original to weighted target, so we need to multiply by the original weights
-        weights_dict[method] = np.loadtxt(path, delimiter=",")*original_test_weight
-    
-    weights_dict['Original'] = original_test_weight
-    
-    # Make the plots
+    for method, paths in saved_paths.items():
+        weights_dict[method] = np.loadtxt(paths["weights"], delimiter=",")*all_params_sample["original_weight"]
+
+    weights_dict['Original'] = all_params_sample["original_weight"]
 
     with open(args.binning_file, 'r') as f:
         binning_dict = json.load(f)
 
-    if args.make_1D_plots:
-        plot_histograms(original_test, target_test, weights_dict,
-                        dict_binning=binning_dict,
-                        original_weights = original_test_weight,
-                        target_weights = target_test_weight,
-                        xlabels = [parameter_labels[param] for param in args.analysis_params],
-                        variables = args.analysis_params, 
-                        output_file=os.path.join(args.output_file, "1Dhist.pdf"))
-    
-    if args.make_2D_plots:
-        plot_2D_histogram(original_test, target_test, weights_dict,
-                          target_weights = target_test_weight,
-                          xlabels = args.interest_params,
-                          nbins = 30, 
-                          pull = True,
-                          output_file=os.path.join(args.output_file, "2Dhist.pdf"))
-    
-    # Compute the metrics
-    idx_3d = [args.analysis_params.index(param) for param in args.params_3D]
-    idx_8d = [args.analysis_params.index(param) for param in args.params_8D]
-        
-    if args.compute_chi2:
-        chi2_dict = {}
-
-        for key in weights_dict.keys():
-            chi2_dim = {}
-
-            for param in args.analysis_params:
-                param_index = args.analysis_params.index(param)
-
-                if param in binning_dict.keys():
-                    x_min, x_max = binning_dict[param]["x_min"], binning_dict[param]["x_max"]
-                    n_bins = binning_dict[param]["n_bins"]
-                else:
-                    x_min, x_max = None, None
-                    n_bins = 30
-
-                chi2_val, dof = chi2_hist_axis(original_test, target_test, weights_dict[key],
-                                               param_index, target_weights=target_test_weight,
-                                               n_bins=n_bins, x_min=x_min, x_max=x_max)  
-
-                chi2_dim[param] = chi2_val/dof if dof > 0 else 0
-                chi2_dim[param+"_p_value"] = chi2_p_value(chi2_val, dof)
-
-            chi2_dict[key] = chi2_dim
-
-        dof_3D = 0
-        for param in args.params_3D:
-            if param in binning_dict.keys():
-                n_bins = binning_dict[param]["n_bins"]
-            else:
-                n_bins = 30
-            dof_3D += n_bins - 1
-
-        chi2_3D_dict = chi2_dof(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict,
-                                target_weights=target_test_weight,
-                                binning_dict=binning_dict, List_param_interest = args.params_3D)
-        chi2_3D_p_values = {key: chi2_p_value(chi2*dof_3D, dof_3D) for key, chi2 in chi2_3D_dict.items()}
-        chi2_8D_dict = chi2_dof(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict,
-                                target_weights=target_test_weight,
-                                binning_dict=binning_dict, List_param_interest = args.params_8D)
-        chi2_all_dict = chi2_dof(original_test, target_test, weights_dict,
-                                 target_weights=target_test_weight,
-                                 binning_dict=binning_dict, List_param_interest = args.analysis_params)
-
-
-    if args.compute_swd:
-        if args.custom_swd_distribution is not None:
-            swd_custom_list = np.load(args.custom_swd_distribution)
-            swd_dict_custom = compute_swd(original_test[:, Index_parameters], target_test[:, Index_parameters],
-                                          weights_dict, target_weights=target_test_weight, 
-                                          n_directions=args.n_directions)
-            p_value_dict_custom = compute_p_value(swd_dict_custom, swd_custom_list)
-
-        swd_list_3D = np.load(args.swd_distribution_3D)
-        swd_list_8D = np.load(args.swd_distribution_8D)
-        swd_list_all = np.load(args.swd_distribution_all)
-
-        swd_dict_3D = compute_swd(original_test[:, idx_3d], target_test[:, idx_3d], weights_dict,
-                                  target_weights=target_test_weight, n_directions=args.n_directions)
-        swd_dict_8D = compute_swd(original_test[:, idx_8d], target_test[:, idx_8d], weights_dict,
-                                  target_weights=target_test_weight, n_directions=args.n_directions)
-        swd_dict_all = compute_swd(original_test, target_test, weights_dict,
-                                   target_weights=target_test_weight, n_directions=args.n_directions)
-
-        p_value_dict_3D = compute_p_value(swd_dict_3D, swd_list_3D)
-        p_value_dict_8D = compute_p_value(swd_dict_8D, swd_list_8D)
-        p_value_dict_all = compute_p_value(swd_dict_all, swd_list_all)
-
-    # Save the metrics in a json file
     metrics_dict = {}
 
     if args.compute_chi2:
-        metrics_dict['chi2_1D'] = chi2_dict
-        metrics_dict['chi2_3D'] = chi2_3D_dict
-        metrics_dict['chi2_3D_p_value'] = chi2_3D_p_values
-        metrics_dict['chi2_8D'] = chi2_8D_dict
-        metrics_dict['chi2_all'] = chi2_all_dict
+        # Chi2 of every analysis parameter taken on its own.
+        chi2_1D = {}
+        for method in weights_dict:
+            chi2_of_params = {}
+            for param_index, param in enumerate(all_params_sample["params"]):
+                x_min, x_max, n_bins = binning_of(param, binning_dict)
+                chi2_val, dof = chi2_hist_axis(all_params_sample["original"], all_params_sample["target"],
+                                               weights_dict[method], param_index,
+                                               target_weights=all_params_sample["target_weight"],
+                                               n_bins=n_bins, x_min=x_min, x_max=x_max)
+                chi2_of_params[param] = chi2_val/dof if dof > 0 else 0
+                chi2_of_params[param+"_p_value"] = chi2_p_value(chi2_val, dof)
+            chi2_1D[method] = chi2_of_params
+        metrics_dict['chi2_1D'] = chi2_1D
+
+        # Chi2 of every set of parameters.
+        for set_name, sample in test_samples.items():
+            chi2_and_dof_of_set = chi2_dof(sample["original"], sample["target"], weights_dict,
+                                           target_weights=sample["target_weight"],
+                                           binning_dict=binning_dict, list_param_interest=sample["params"],
+                                           return_chi2_and_dof=True)
+            chi2_of_set = {method: chi2 / dof if dof > 0 else 0
+                           for method, (chi2, dof) in chi2_and_dof_of_set.items()}
+            metrics_dict[f'chi2_{set_name}'] = chi2_of_set
+            metrics_dict[f'chi2_{set_name}_p_value'] = {method: chi2_p_value(chi2, dof)
+                                                        for method, (chi2, dof) in chi2_and_dof_of_set.items()}
 
     if args.compute_swd:
-        if args.custom_swd_distribution is not None:
-            metrics_dict['swd_custom'] = swd_dict_custom
-            metrics_dict['p_value_custom'] = p_value_dict_custom
+        for set_name, sample in test_samples.items():
+            if set_name not in swd_distributions:
+                print(f"Warning: no bootstrapped SWD distribution given for the parameter set '{set_name}': "
+                      "its SWD p-values are not computed.")
+                continue
 
-        metrics_dict['swd_3D'] = swd_dict_3D
-        metrics_dict['swd_8D'] = swd_dict_8D
-        metrics_dict['swd_all'] = swd_dict_all
-        metrics_dict['p_value_3D'] = p_value_dict_3D
-        metrics_dict['p_value_8D'] = p_value_dict_8D
-        metrics_dict['p_value_all'] = p_value_dict_all
-    with open(os.path.join(args.output_file, "metrics.json"), 'w') as f:
+            swd_of_set = compute_swd(sample["original"], sample["target"], weights_dict,
+                                     target_weights=sample["target_weight"], n_directions=args.n_directions)
+            metrics_dict[f'swd_{set_name}'] = swd_of_set
+            metrics_dict[f'p_value_{set_name}'] = compute_p_value(swd_of_set, np.load(swd_distributions[set_name]))
+
+    output_dir = os.path.dirname(args.output_file)
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+    with open(args.output_file, 'w') as f:
         json.dump(metrics_dict, f, indent=0)
 
-    # Plot the training history if possible
-    if "XGB" in weights_path_dict.keys():
-        model_path = weights_path_dict["XGB"].replace("saved_weights", "saved_models").replace("Training_4D", "4D").replace("weights_test", "model").replace("csv", "pkl")
-        model = pickle.load(open(model_path, "rb"))
-        training_history = model.evals_result()
-        with PdfPages(os.path.join(args.output_file, "XGB_training_history.pdf")) as pdf:
-            plt.plot(training_history["validation_0"]["logloss"], label='Train Log Loss')
-            plt.plot(training_history["validation_1"]["logloss"], label='Validation Log Loss')
-            plt.xlabel('Epoch')
-            plt.ylabel('Log Loss')
-            plt.title(f'Training History for XGB {len(Index_parameters)}D training')
-            plt.legend()
-            pdf.savefig()
-            plt.close()
-
-    
-
-        
-    
-
-    
-
-                           
+    print(f"Metrics of the parameter sets {list(test_samples)} saved in {args.output_file}.")

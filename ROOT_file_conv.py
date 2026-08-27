@@ -71,7 +71,7 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
 
     # multiplicity and sum of kinetic energies of final state protons, neutrons and pions
     pdg = tree["pdg"]
-    E   = tree["E"]
+    energy = tree["E"]
     px = tree["px"]
     py = tree["py"]
     pz = tree["pz"]
@@ -86,11 +86,11 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     tree["N_other"] = ak.sum((pdg != 2112) & (pdg != 2212) & (pdg != 111) & (pdg != 211) & (pdg != -211) & (pdg != 22) & (pdg < 1000000000), axis=1) - 1 # -1 to remove prim lepton
 
     #Sum of kinetic energy
-    tree["E_N"]   = E * (pdg == 2112)
-    tree["E_P"]   = E * (pdg == 2212)
-    tree["E_pi0"] = E * (pdg == 111)
-    tree["E_pim"] = E * (pdg == -211)
-    tree["E_pip"] = E * (pdg == 211)
+    tree["E_N"]   = energy * (pdg == 2112)
+    tree["E_P"]   = energy * (pdg == 2212)
+    tree["E_pi0"] = energy * (pdg == 111)
+    tree["E_pim"] = energy * (pdg == -211)
+    tree["E_pip"] = energy * (pdg == 211)
 
     tree["P2_N"] = px**2 * (pdg == 2112) + py**2 * (pdg == 2112) + pz**2 * (pdg == 2112)
     tree["P2_P"] = px**2 * (pdg == 2212) + py**2 * (pdg == 2212) + pz**2 * (pdg == 2212)
@@ -103,7 +103,7 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     tree["K_pi0"] = ak.sum(tree["E_pi0"] - np.sqrt(tree["E_pi0"]**2 - tree["P2_pi0"]), axis=1) 
     tree["K_pim"] = ak.sum(tree["E_pim"] - np.sqrt(tree["E_pim"]**2 - tree["P2_pim"]), axis=1)
     tree["K_pip"] = ak.sum(tree["E_pip"] - np.sqrt(tree["E_pip"]**2 - tree["P2_pip"]), axis=1)
-    tree["E_gamma"] = ak.sum(E * (pdg == 22), axis=1)
+    tree["E_gamma"] = ak.sum(energy * (pdg == 22), axis=1)
 
 
     # we create a topology parameter that gathers the modes based on the number of pions in the final state
@@ -141,6 +141,14 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     tree["Topology"] = ak.full_like(tree["Mode"], topology_code("Other"), dtype=np.int64)  # sensible default
     for top in topology_masks.keys():
         tree["Topology"] = ak.where(topology_masks[top], topology_code(top), tree["Topology"])
+
+    # We now cut the tree to the desired topologies if specified
+    if topologies is not None:
+        mask = False
+        for top in topologies:
+            mask = mask | (tree["Topology"] == topology_code(top))
+
+        tree = tree[mask]
 
     # we now create the final array containing the parameters of interest
     # The weights are carried along as an extra column, so that the NaN cleaning below removes the same
