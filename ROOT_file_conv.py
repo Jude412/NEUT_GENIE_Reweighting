@@ -142,6 +142,14 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
     for top in topology_masks.keys():
         tree["Topology"] = ak.where(topology_masks[top], topology_code(top), tree["Topology"])
 
+    # We now cut the tree to the desired topologies if specified
+    if topologies is not None:
+        mask = False
+        for top in topologies:
+            mask = mask | (tree["Topology"] == topology_code(top))
+
+        tree = tree[mask]
+
     # we now create the final array containing the parameters of interest
     # The weights are carried along as an extra column, so that the NaN cleaning below removes the same
     # events from the parameters and from the weights.

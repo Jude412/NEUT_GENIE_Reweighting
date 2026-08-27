@@ -75,8 +75,8 @@ parameters:
         "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
 
   # Sets of parameters the metrics are computed on, each named by its key. Samples, bootstrapped
-  # SWD distributions and metrics are produced for every set listed here, so adding a set is a
-  # config file change: every parameter of a set must also be listed in the "all" section above.
+  # SWD distributions and metrics are produced for every set listed here.
+  # Every parameter of a set must also be listed in the "all" section above.
   # The "all" set itself and the set of reweighting parameters are always added to them.
   metric_sets:
     8D: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav"]
@@ -91,30 +91,25 @@ models:
     - XGB
   # choose from binning and XGB (XGBoost)
 
-  # Json file holding the hyperparameter grid every model is fine-tuned over. The number of
-  # fine-tuning runs of a model is the size of its grid, so it never has to be given here.
-  grid_file: "hyperparameter_grids.json"
+  # Json file holding the hyperparameter grid every model is fine-tuned over
+  grid_file: "hyperparameter_grids_test.json"
 
   # Metric the best hyperparameter set of every model is picked with, and whether it is
   # minimised ("min") or maximised ("max"). The metrics are named after the parameter sets
   # above (ex: SWD_3D, p_value_8D, chi2_dof_all).
   selection_metric:
     binning:
-      metric: SWD_3D
+      metric: SWD_8D
       direction: min
     XGB:
-      metric: p_value_8D
-      direction: max
-
-dimensions:
-  dim: 6
-  # In case of 3 or 8 dimensions, add an extra string (ex: "_custom") to dim, to rule out the degeneracy with the regular 3D and 8D cases (always computed for metrics).
+      metric: SWD_8D
+      direction: min
 
 swd_bootstrapping:
-  # runs: 100
-  # n_directions: 100
-  runs: 200
-  n_directions: 500
+  runs: 50
+  n_directions: 50
+  # runs: 200
+  # n_directions: 500
 
 output:
-  tag: "testing_preweights2"
+  tag: "testing_refactor"

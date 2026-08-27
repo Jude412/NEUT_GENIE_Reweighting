@@ -9,11 +9,17 @@ import argparse
 import json
 import os
 
-def count_topologies(input_file, input_tree, branches, topologies, modes=None):
+def count_topologies(input_file, input_tree, branches, topologies, modes=None, weighted=False):
     """Return a dictionary giving, for each requested topology, the number of selected events in the file."""
     # "Topology" is the only parameter needed here, and no topology cut is applied so that every
     # requested topology can be counted in a single pass over the file.
-    codes = convert_input_file(input_file, input_tree, branches, ["Topology"], modes=modes, topologies=None)[:, 0]
+    codes, weights = convert_input_file(input_file, input_tree, branches, ["Topology"], modes=modes, topologies=None, return_weights=True)
+    codes = codes[:, 0]
+
+    if weighted:
+        # Make weights order 1
+        weights = weights / np.mean(weights)
+        return {str(topology): int(np.sum(weights[codes == topology_code(topology)])) for topology in topologies}
     return {str(topology): int(np.sum(codes == topology_code(topology))) for topology in topologies}
 
 if __name__ == "__main__":
@@ -31,15 +37,19 @@ if __name__ == "__main__":
     argparser.add_argument("--output_file", required=True, type=str, help="Path to the json file where the counts will be saved.")
     args = argparser.parse_args()
 
-    print("Counting the events of each topology in the original and target files...")
+    print("Counting the events (preweighted events) of each topology in the original and target files...")
 
     counts = {
         "original": count_topologies(args.input_file_original, args.input_tree_original, args.branches, args.topologies, modes=args.modes),
         "target": count_topologies(args.input_file_target, args.input_tree_target, args.branches, args.topologies, modes=args.modes),
     }
+    weighted_counts = {
+        "original": count_topologies(args.input_file_original, args.input_tree_original, args.branches, args.topologies, modes=args.modes, weighted=True),
+        "target": count_topologies(args.input_file_target, args.input_tree_target, args.branches, args.topologies, modes=args.modes, weighted=True),
+    }
 
     for topology in args.topologies:
-        print(f"  {topology}: {counts['original'][str(topology)]} original event(s), {counts['target'][str(topology)]} target event(s)")
+        print(f"  {topology}: {counts['original'][str(topology)]} ({weighted_counts['original'][str(topology)]}) original events, {counts['target'][str(topology)]} ({weighted_counts['target'][str(topology)]}) target events")
 
     os.makedirs(os.path.dirname(args.output_file) or ".", exist_ok=True)
     with open(args.output_file, "w") as f:
