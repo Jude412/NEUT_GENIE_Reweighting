@@ -89,10 +89,11 @@ models:
   model_list:
     - binning
     - XGB
-  # choose from binning and XGB (XGBoost)
+    - unnormXGB
+  # choose from binning, XGB (XGBoost), unnormXGB (XGB without normalised training classes)
 
   # Json file holding the hyperparameter grid every model is fine-tuned over
-  grid_file: "hyperparameter_grids_test.json"
+  grid_file: "hyperparameter_grids.json"
 
   # Metric the best hyperparameter set of every model is picked with, and whether it is
   # minimised ("min") or maximised ("max"). The metrics are named after the parameter sets
@@ -106,10 +107,10 @@ models:
       direction: min
 
 swd_bootstrapping:
-  runs: 50
-  n_directions: 50
-  # runs: 200
-  # n_directions: 500
+  # runs: 50
+  # n_directions: 50
+  runs: 200
+  n_directions: 500
 
 output:
-  tag: "testing_refactor"
+  tag: "testing_refactor_2"
