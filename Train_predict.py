@@ -14,6 +14,8 @@ DEFAULT_HYPERPARAMETERS = {
     "binning": {"n_bins": 12, "n_neighs": 0},
     "XGB": {"n_estimators": 100, "learning_rate": 0.05, "max_depth": 3, "gamma": 2,
             "subsample": 0.3, "early_stopping_rounds": 10},
+    "unnormXGB": {"n_estimators": 100, "learning_rate": 0.05, "max_depth": 3, "gamma": 2,
+            "subsample": 0.3, "early_stopping_rounds": 10},
 }
 MODEL_NAMES = tuple(DEFAULT_HYPERPARAMETERS)
 
@@ -119,6 +121,63 @@ def predict_XGB(original, model):
     weights = shape_weights * model.norm_ratio # Weights for shape and normalization matching
     return weights
 
+def train_unnormXGB(original_train, original_val, target_train, target_val, 
+              hparams = {"n_estimators": 100,
+                    "max_depth": 3,
+                    "learning_rate": 0.1,
+                    "subsample": 1, 
+                    "gamma": 1,
+                    "early_stopping_rounds": 10}, original_train_weight=None, original_val_weight=None, target_train_weight=None, target_val_weight=None):
+    """This function trains an XGBReweighter to reweight the 'original' distribution into the 'target' distribution, without normalising the classes. 
+    The output is a model that can be used to give weights to the 'original' distribution to make it look like the 'target' distribution."""
+    if original_train_weight is None:
+        original_train_weight = np.ones(original_train.shape[0])
+    if target_train_weight is None:
+        target_train_weight = np.ones(target_train.shape[0])
+    if target_val_weight is None:
+        target_val_weight = np.ones(target_val.shape[0])
+    if original_val_weight is None:
+        original_val_weight = np.ones(original_val.shape[0])
+       
+    x_train = np.concatenate((original_train, target_train), axis=0)
+    y_train = np.concatenate((np.zeros(len(original_train)), np.ones(len(target_train))), axis=0)
+    w_train = np.concatenate((original_train_weight, target_train_weight))
+
+    x_val = np.concatenate((original_val, target_val), axis=0)
+    y_val = np.concatenate((np.zeros(len(original_val)), np.ones(len(target_val))), axis=0)
+    w_val = np.concatenate((original_val_weight, target_val_weight))
+
+    # Need weights of order 1 for XGB. Can just rescale all the weights.
+    # The median is taken over the events carrying a weight, so that a sample in which more than half of
+    # the events have a null weight does not give a null (or non-finite) scale.
+    positive_weights = w_train[w_train > 0]
+    weight_scale = np.median(positive_weights) if positive_weights.size > 0 else 1.
+    if not np.isfinite(weight_scale) or weight_scale <= 0:
+        print("Warning: the weights of the training sample give no usable scale: they are left untouched.")
+        weight_scale = 1.
+    w_train /= weight_scale
+    w_val /= weight_scale
+
+    bst = XGBClassifier(objective='binary:logistic',
+                    eval_metric=['auc', 'logloss'],
+                    **hparams)
+
+    bst.fit(
+        x_train, y_train,
+        sample_weight = w_train,
+        eval_set=[(x_train, y_train), (x_val, y_val)],
+        sample_weight_eval_set=[w_train, w_val],
+        verbose=False
+    )
+
+    return bst
+
+def predict_unnormXGB(original, model):
+    """This function uses the trained model to return the weights used for the reweighting process."""
+    predictions = model.predict_proba(original, iteration_range=(0, best_iteration_of(model) + 1))
+    p = np.clip(predictions[:, 1], 1e-7, 1 - 1e-7)
+    weights = p / (1 - p) # Weights for shape and norm matching
+    return weights
 
 def check_model(model_name):
     """Raise if the given model is not one of the models that can be trained."""
@@ -155,10 +214,13 @@ def train_model(model_name, samples, hyperparameters):
                              hyperparameters["n_bins"], hyperparameters["n_neighs"],
                              original_train_weight=original_train_weight,
                              target_train_weight=target_train_weight)
-
-    return train_XGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
-                     original_train_weight=original_train_weight, original_val_weight=original_val_weight,
-                     target_train_weight=target_train_weight, target_val_weight=target_val_weight)
+    elif model_name == "XGB":
+        return train_XGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
+                         original_train_weight=original_train_weight, original_val_weight=original_val_weight,
+                         target_train_weight=target_train_weight, target_val_weight=target_val_weight)
+    return train_unnormXGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
+                           original_train_weight=original_train_weight, original_val_weight=original_val_weight,
+                           target_train_weight=target_train_weight, target_val_weight=target_val_weight)
 
 def predict_model(model_name, model, original):
     """Return the weights a trained model gives to a distribution.
@@ -168,5 +230,6 @@ def predict_model(model_name, model, original):
     check_model(model_name)
     if model_name == "binning":
         return predict_binning(model, original)
-
-    return predict_XGB(original, model)
+    elif model_name == "XGB":
+        return predict_XGB(original, model)
+    return predict_unnormXGB(original, model)

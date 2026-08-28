@@ -67,13 +67,13 @@ if __name__ == "__main__":
 
     run_name = "_".join(str(value) for value in hyperparams.values())
     writer = SummaryWriter(os.path.join(args.logdir, f"run_{run_name}_{int(time.time())}"))
-
+fine
     # The trained weights take the pre-weighted original distribution to the pre-weighted target one,
     # so they are multiplied by the pre-weights of the events to give their absolute weights.
     weight_dict = {args.model: weights_test*train_samples["original_test"][1]}
 
     metrics = {}
-    if args.model == 'XGB':
+    if (args.model == 'XGB') | (args.model == 'unnormXGB'):
         best_iter = best_iteration_of(model)
         metrics.update({
             "val_logloss": model.evals_result()['validation_1']['logloss'][best_iter],
