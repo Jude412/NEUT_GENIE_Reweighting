@@ -13,7 +13,7 @@
     "lambda": [1],
     "alpha": [0],
     "early_stopping_rounds": [10]
-  }
+  },
   "unnormXGB": {
     "n_estimators": [100, 150, 200],
     "learning_rate": [0.01, 0.05, 0.1, 0.2],

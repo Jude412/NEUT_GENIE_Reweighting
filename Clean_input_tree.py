@@ -35,7 +35,7 @@ import sys
 from pathlib import Path
 
 # Pattern used to find the root file to keep inside the kept sub-directory.
-ROOT_FILE_GLOB = "*.root"
+ROOT_FILE_GLOB = "t2knova.flattree.*.*.*.*.numu.root"
 
 def find_branch_dirs(src_root: Path, keep_dir: str, require_dirs):
     """Yield every directory in src_root that looks like a 'branch':
