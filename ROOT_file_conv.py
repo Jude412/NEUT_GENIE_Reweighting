@@ -4,8 +4,11 @@ return an array containing the desired parameters of interest. They are to be gi
 import numpy as np
 import uproot
 import awkward as ak
+from typing import cast
 from Sample_io import WEIGHT_COLUMN
 
+# Branches to read in
+BRANCHES = ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep", "fScaleFactor", "RWWeight"]
 # Branches whose product gives the total weight of an event.
 WEIGHT_BRANCHES = ("RWWeight", "fScaleFactor")
 
@@ -38,11 +41,11 @@ def topology_code(topology):
         raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
     return int(topology)
 
-def convert_input_file(input_file, input_tree, branches, analysis_params, modes = None, topologies = None, return_weights = False):
+def convert_input_file(input_file, input_tree, analysis_params, modes = None, topologies = None, return_weights = False):
     """This function takes as input a ROOT FlatTree from and returns an array containing all the parameters of interest."""
     # Open the ROOT file
     file = uproot.open(input_file)
-    tree = file[input_tree].arrays(branches, library="ak")
+    tree = cast(uproot.TTree, file[input_tree]).arrays(BRANCHES, library="ak")
     
     tree["W"] = tree["W_nuc_rest"]
 
@@ -51,8 +54,7 @@ def convert_input_file(input_file, input_tree, branches, analysis_params, modes 
         tree[WEIGHT_COLUMN] = tree[WEIGHT_BRANCHES[0]] * tree[WEIGHT_BRANCHES[1]]
     else:
         print(f"Warning: the branches {WEIGHT_BRANCHES} were not both read from {input_file}: "
-              "every event is given a weight of 1. Add them to the 'inputs'/'branches' section of the "
-              "config file to use the weights stored in the input files.")
+              "every event is given a weight of 1. Add them to BRANCHES")
         tree[WEIGHT_COLUMN] = ak.ones_like(tree["W"])
 
     # For dealing with modes, we use absolute value to allow common treatment of neutrinos and antineutrinos. No ambiguity arises because separate BDTs are trained for neutrinos and antineutrinos.

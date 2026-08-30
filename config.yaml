@@ -5,8 +5,6 @@ inputs:
   # target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_file_tree"
   target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test_20M"
   target_tree: "T2KNOvATruthTree"
-  # All branches read for calculation of analysis parameters
-  branches: ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep", "fScaleFactor", "RWWeight"]
 
 analysis:
   modes: 
@@ -55,8 +53,6 @@ analysis:
   #choose in CC0pi, CC1pipm, CC1pi0, CCNpi, CCgamma, CCOther, NCInc and rest (rest should be empty)
   #a separate training is run for each listed topology
 
-
-  neutrino_PDG: 14
   train_percentage: 0.4
   val_percentage: 0.4
 
