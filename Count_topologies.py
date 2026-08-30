@@ -9,11 +9,11 @@ import argparse
 import json
 import os
 
-def count_topologies(input_file, input_tree, branches, topologies, modes=None, weighted=False):
+def count_topologies(input_file, input_tree, topologies, modes=None, weighted=False):
     """Return a dictionary giving, for each requested topology, the number of selected events in the file."""
     # "Topology" is the only parameter needed here, and no topology cut is applied so that every
     # requested topology can be counted in a single pass over the file.
-    codes, weights = convert_input_file(input_file, input_tree, branches, ["Topology"], modes=modes, topologies=None, return_weights=True)
+    codes, weights = convert_input_file(input_file, input_tree, ["Topology"], modes=modes, topologies=None, return_weights=True)
     codes = codes[:, 0]
 
     if weighted:
@@ -30,7 +30,6 @@ if __name__ == "__main__":
                            default="FlatTree_VARS")
     argparser.add_argument("--input_tree_target", required=False, type=str, help="Name of the FlatTree in the target input file.",
                            default="FlatTree_VARS")
-    argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
     argparser.add_argument("--modes", type=int, nargs="+", required=False, help="Interaction modes to select (e.g. 1 for CCQE).", default=[1])
     argparser.add_argument("--topologies", type=str, nargs="+", required=False, help="Interaction topologies to count, given by name (e.g. CC0pi).",
                            default=["CC0pi"])
@@ -40,12 +39,12 @@ if __name__ == "__main__":
     print("Counting the events (preweighted events) of each topology in the original and target files...")
 
     counts = {
-        "original": count_topologies(args.input_file_original, args.input_tree_original, args.branches, args.topologies, modes=args.modes),
-        "target": count_topologies(args.input_file_target, args.input_tree_target, args.branches, args.topologies, modes=args.modes),
+        "original": count_topologies(args.input_file_original, args.input_tree_original, args.topologies, modes=args.modes),
+        "target": count_topologies(args.input_file_target, args.input_tree_target, args.topologies, modes=args.modes),
     }
     weighted_counts = {
-        "original": count_topologies(args.input_file_original, args.input_tree_original, args.branches, args.topologies, modes=args.modes, weighted=True),
-        "target": count_topologies(args.input_file_target, args.input_tree_target, args.branches, args.topologies, modes=args.modes, weighted=True),
+        "original": count_topologies(args.input_file_original, args.input_tree_original, args.topologies, modes=args.modes, weighted=True),
+        "target": count_topologies(args.input_file_target, args.input_tree_target, args.topologies, modes=args.modes, weighted=True),
     }
 
     for topology in args.topologies:

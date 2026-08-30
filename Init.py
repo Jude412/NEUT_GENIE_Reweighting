@@ -26,15 +26,12 @@ if __name__ == "__main__":
                            default="FlatTree_VARS")
     argparser.add_argument("--input_tree_target", required=False, type=str, help="Name of the FlatTree in the target input file.",
                            default="FlatTree_VARS")
-    argparser.add_argument("--branches", nargs="+", help="List of branches to extract from the ROOT files.")
     argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
     add_param_set_argument(argparser, help_suffix=f" The '{ALL_PARAMS_SET}' set holding every analysis parameter is always written.")
     argparser.add_argument("--modes", type=int, nargs="+", help="Interaction modes to select (e.g. 1 for CCQE).",
                            required=False, default=[1])
     argparser.add_argument("--topologies", type=str, nargs="+", help="Interaction topologies to select, given by name (e.g. CC0pi).",
                            required=False, default=["CC0pi"])
-    # argparser.add_argument("--neutrino_PDG", type=int, help="PDG code of the neutrino type to select (e.g. 14 for numu).", 
-    #                        required=False, default = 14)
     argparser.add_argument("--train_percentage", type=float, help="Percentage of the training sample (between 0 and 1).",
                            required=False, default=0.4)
     argparser.add_argument("--val_percentage", type=float, help="Percentage of the validation sample (between 0 and 1).",
@@ -57,8 +54,8 @@ if __name__ == "__main__":
     # Getting data from the files
     print("Getting data from the files...")
 
-    original, original_weights = convert_input_file(args.input_file_original, args.input_tree_original, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
-    target, target_weights = convert_input_file(args.input_file_target, args.input_tree_target, args.branches, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
+    original, original_weights = convert_input_file(args.input_file_original, args.input_tree_original, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
+    target, target_weights = convert_input_file(args.input_file_target, args.input_tree_target, args.analysis_params, modes = args.modes, topologies = args.topologies, return_weights = True)
 
     min_events = minimum_events(args.train_percentage, args.val_percentage)
     for name, dataset in (("original", original), ("target", target)):

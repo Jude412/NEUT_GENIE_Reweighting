@@ -195,7 +195,6 @@ checkpoint count_topologies:
         topologies=TOPOLOGIES,
         original_tree=config["inputs"]["original_tree"],
         target_tree=config["inputs"]["target_tree"],
-        branches=config["inputs"]["branches"]
 
     output:
         counts_file=TOPOLOGY_COUNTS_FILE
@@ -210,7 +209,6 @@ checkpoint count_topologies:
             --input_file_target {input.target_file} \
             --input_tree_original {params.original_tree} \
             --input_tree_target {params.target_tree} \
-            --branches {params.branches} \
             --modes {params.modes} \
             --topologies {params.topologies} \
             --output_file {output.counts_file}
@@ -226,10 +224,8 @@ rule initialize_analysis:
         modes=MODES,
         original_tree=config["inputs"]["original_tree"],
         target_tree=config["inputs"]["target_tree"],
-        # neutrino_PDG=config["analysis"]["neutrino_PDG"],
         train_percentage=config["analysis"]["train_percentage"],
         val_percentage=config["analysis"]["val_percentage"],
-        branches=config["inputs"]["branches"],
         analysis_params=config["parameters"]["all"],
         # One '--param_set NAME param1 param2 ...' argument per configured set of parameters.
         # The 'all' set is always written by the script itself.
@@ -253,7 +249,6 @@ rule initialize_analysis:
             --input_file_target {input.target_file} \
             --input_tree_original {params.original_tree} \
             --input_tree_target {params.target_tree} \
-            --branches {params.branches} \
             --analysis_params {params.analysis_params} \
             {params.param_sets} \
             --modes {params.modes} \

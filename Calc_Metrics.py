@@ -27,10 +27,10 @@ if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description='Evaluate the performance of the reweighting methods.')
     argparser.add_argument('--sample_dir', action='append', nargs=2, required=True, metavar=('NAME', 'PATH'),
                            help='Name of a set of analysis parameters and the directory holding its samples. '
-                                f"Can be given once per set, and must be given for the '{ALL_PARAMS_SET}' set.")
+                           f"Can be given once per set, and must be given for the '{ALL_PARAMS_SET}' set.")
     argparser.add_argument('--swd_distribution', action='append', nargs=2, default=[], metavar=('NAME', 'PATH'),
                            help='Name of a set of analysis parameters and the npy file holding the bootstrapped SWD '
-                                'distribution its p-values are computed with. Can be given once per set.')
+                           'distribution its p-values are computed with. Can be given once per set.')
     argparser.add_argument('--weights_paths', type=str, required=False,
                            help="Path to the json file holding, for each method, the paths to its predicted weights and to its model.",
                            default='/vols/dune/jmm224/t2knova/reweighting/make_metrics.json')
@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     if ALL_PARAMS_SET not in sample_dirs:
         raise ValueError(f"No directory given for the '{ALL_PARAMS_SET}' set of every analysis parameter, "
-                         f"which the per-parameter metrics are computed from. The sets given are {list(sample_dirs)}.")
+            f"which the per-parameter metrics are computed from. The sets given are {list(sample_dirs)}.")
 
     # We load the test samples of every parameter set. They all hold the same events, only their
     # parameters differ, so the weights predicted by a method apply to all of them.
@@ -106,16 +106,16 @@ if __name__ == "__main__":
                                            binning_dict=binning_dict, list_param_interest=sample["params"],
                                            return_chi2_and_dof=True)
             chi2_of_set = {method: chi2 / dof if dof > 0 else 0
-                           for method, (chi2, dof) in chi2_and_dof_of_set.items()}
+                for method, (chi2, dof) in chi2_and_dof_of_set.items()}
             metrics_dict[f'chi2_{set_name}'] = chi2_of_set
             metrics_dict[f'chi2_{set_name}_p_value'] = {method: chi2_p_value(chi2, dof)
-                                                        for method, (chi2, dof) in chi2_and_dof_of_set.items()}
+                for method, (chi2, dof) in chi2_and_dof_of_set.items()}
 
     if args.compute_swd:
         for set_name, sample in test_samples.items():
             if set_name not in swd_distributions:
                 print(f"Warning: no bootstrapped SWD distribution given for the parameter set '{set_name}': "
-                      "its SWD p-values are not computed.")
+                    "its SWD p-values are not computed.")
                 continue
 
             swd_of_set = compute_swd(sample["original"], sample["target"], weights_dict,
