@@ -47,11 +47,14 @@ def convert_input_file(input_file, input_tree, analysis_params, modes = None, to
     file = uproot.open(input_file)
     tree = cast(uproot.TTree, file[input_tree]).arrays(BRANCHES, library="ak")
     
-    tree["W"] = tree["W_nuc_rest"]
 
     # Per-event weight: the total weight of an event is the product of its reweighting weight and of its scale factor.
     if WEIGHT_BRANCHES[0] in tree.fields and WEIGHT_BRANCHES[1] in tree.fields:
         tree[WEIGHT_COLUMN] = tree[WEIGHT_BRANCHES[0]] * tree[WEIGHT_BRANCHES[1]]
+        pos_weight_mask = tree[WEIGHT_COLUMN] > 0
+        if not ak.all(pos_weight_mask):
+            print(f"Warning: {ak.sum(~pos_weight_mask)} out of {len(tree)} events in {input_file} have non-positive weights. They will be removed.")
+            tree = tree[pos_weight_mask]
     else:
         print(f"Warning: the branches {WEIGHT_BRANCHES} were not both read from {input_file}: "
               "every event is given a weight of 1. Add them to BRANCHES")
@@ -107,6 +110,7 @@ def convert_input_file(input_file, input_tree, analysis_params, modes = None, to
     tree["K_pip"] = ak.sum(tree["E_pip"] - np.sqrt(tree["E_pip"]**2 - tree["P2_pip"]), axis=1)
     tree["E_gamma"] = ak.sum(energy * (pdg == 22), axis=1)
 
+    tree["W"] = tree["W_nuc_rest"]
 
     # we create a topology parameter that gathers the modes based on the number of pions in the final state
 

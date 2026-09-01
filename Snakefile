@@ -307,10 +307,10 @@ rule custom_dim_analysis:
         # are exactly the ones the initialisation put in it.
         # The last sample written by the initialisation is requested alongside its directory, as the
         # timestamp of a directory does not follow the files it holds: it is not passed to the script.
-        init_samples_dir=INIT_SAMPLES_DIR + "all/",
         last_init_sampled_file=INIT_SAMPLES_DIR + "all/target_test.csv"
 
     params:
+        init_samples_dir=INIT_SAMPLES_DIR + "all/",
         parameters_interest=config["parameters"]["reweighting"],
         tag=config["output"]["tag"]
 
@@ -322,7 +322,7 @@ rule custom_dim_analysis:
     shell:
         """
         python Splitting_script.py \
-            --init_samples_dir {input.init_samples_dir} \
+            --init_samples_dir {params.init_samples_dir} \
             --parameters_interest {params.parameters_interest} \
             --samples_dir {output.samples_dir}
         """
@@ -346,13 +346,15 @@ rule prepare_hps:
 
 rule single_fine_tuning:
     input:
-        train_samples_dir=SAMPLES_DIR,
-        sample_dirs=expand(INIT_SAMPLES_DIR + "{param_set}/", param_set=PARAM_SETS, allow_missing=True),
+        last_sampled_file=SAMPLES_DIR + "target_test.csv",
+        last_sampled_files=expand(INIT_SAMPLES_DIR + "{param_set}/target_test.csv",
+                                   param_set=PARAM_SETS, allow_missing=True),
         hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json",
         swd_distributions=expand(INIT_SWD_DIR + "{param_set}/swd_distribution_{param_set}.npy",
                                  param_set=PARAM_SETS, allow_missing=True)
 
     params:
+        train_samples_dir=SAMPLES_DIR,
         model="{model}",
         logdir=TENSORBOARD_DIR + "{model}/",
         binning_file=config["parameters"]["binning_file"],
@@ -369,7 +371,7 @@ rule single_fine_tuning:
     shell:
         """
         python Fine_tuning.py \
-            --train_sample_dir {input.train_samples_dir} \
+            --train_sample_dir {params.train_samples_dir} \
             {params.sample_dir_flags} \
             {params.swd_distribution_flags} \
             --model {params.model} \
@@ -438,7 +440,6 @@ rule train_models:
 
 rule compute_metrics:
     input:
-        sample_dirs=expand(INIT_SAMPLES_DIR + "{param_set}/", param_set=PARAM_SETS, allow_missing=True),
         last_sampled_files=expand(INIT_SAMPLES_DIR + "{param_set}/target_test.csv",
                                   param_set=PARAM_SETS, allow_missing=True),
         weights_path=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json",
@@ -470,12 +471,9 @@ rule compute_metrics:
             --binning_file {params.binning_file}
         """
 
-
 rule make_plots:
     input:
-        sample_dir_1D=INIT_SAMPLES_DIR + f"{ALL_PARAMS_SET}/",
         last_sampled_file_1D=INIT_SAMPLES_DIR + f"{ALL_PARAMS_SET}/target_test.csv",
-        sample_dir_2D=SAMPLES_DIR,
         last_sampled_file_2D=SAMPLES_DIR + "target_test.csv",
         weights_path=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
 
@@ -483,6 +481,8 @@ rule make_plots:
         histograms_1D=FIG_DIR + "1Dhist.pdf"
 
     params:
+        sample_dir_1D=INIT_SAMPLES_DIR + f"{ALL_PARAMS_SET}/",
+        sample_dir_2D=SAMPLES_DIR,
         binning_file=config["parameters"]["binning_file"],
         output_dir=FIG_DIR
 
@@ -492,8 +492,8 @@ rule make_plots:
     shell:
         """
         python Make_plots.py \
-            --sample_dir_1D {input.sample_dir_1D} \
-            --sample_dir_2D {input.sample_dir_2D} \
+            --sample_dir_1D {params.sample_dir_1D} \
+            --sample_dir_2D {params.sample_dir_2D} \
             --weights_paths {input.weights_path} \
             --output_dir {params.output_dir} \
             --make_1D_plots \

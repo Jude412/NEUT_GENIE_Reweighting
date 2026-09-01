@@ -1,9 +1,9 @@
 inputs:
-  # original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_file_tree"
-  original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_test_20M"
+  original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_test"
+  # original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_test_20M"
   original_tree: "T2KNOvATruthTree"
-  # target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_file_tree"
-  target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test_20M"
+  target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test"
+  # target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test_20M"
   target_tree: "T2KNOvATruthTree"
 
 analysis:
@@ -89,7 +89,7 @@ models:
   # choose from binning, XGB (XGBoost), unnormXGB (XGB without normalised training classes)
 
   # Json file holding the hyperparameter grid every model is fine-tuned over
-  grid_file: "hyperparameter_grids.json"
+  grid_file: "hyperparameter_grids_test.json"
 
   # Metric the best hyperparameter set of every model is picked with, and whether it is
   # minimised ("min") or maximised ("max"). The metrics are named after the parameter sets
@@ -106,10 +106,10 @@ models:
       direction: min
 
 swd_bootstrapping:
-  # runs: 50
-  # n_directions: 50
-  runs: 200
-  n_directions: 500
+  runs: 50
+  n_directions: 50
+  # runs: 200
+  # n_directions: 500
 
 output:
-  tag: "test_20M"
+  tag: "test_newrepo2"
