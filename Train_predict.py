@@ -245,9 +245,9 @@ def save_model(model_name, model, path):
 
     'XGB' and 'unnormXGB' are saved in XGBoost's own model format, which stays readable across
     XGBoost versions, unlike a pickled 'XGBClassifier'. The normalisation ratio 'XGB' carries as
-    an extra attribute is not part of that format by default, so it is stored as a booster
-    attribute beforehand, which XGBoost does persist. 'binning' has no such native format and is
-    pickled instead."""
+    an extra attribute, and the 'evals_result' training history, are not part of that format by
+    default, so they are stored as booster attributes beforehand, which XGBoost does persist.
+    'binning' has no such native format and is pickled instead."""
     check_model(model_name)
     if model_name == "binning":
         with open(path + ".pkl", "wb") as f:
@@ -256,6 +256,7 @@ def save_model(model_name, model, path):
 
     if model_name == "XGB":
         model.get_booster().set_attr(norm_ratio=str(model.norm_ratio))
+    model.get_booster().set_attr(evals_result=json.dumps(model.evals_result()))
     model.save_model(path + ".json")
 
 def load_model(model_name, path):
@@ -268,5 +269,10 @@ def load_model(model_name, path):
     model = XGBClassifier()
     model.load_model(path + ".json")
     if model_name == "XGB":
-        model.norm_ratio = float(model.get_booster().attr("norm_ratio"))
+        norm_ratio_attr = model.get_booster().attr("norm_ratio")
+        if norm_ratio_attr is not None:
+            model.norm_ratio = float(norm_ratio_attr)
+    evals_result_attr = model.get_booster().attr("evals_result")
+    if evals_result_attr is not None:
+        model.evals_result_ = json.loads(evals_result_attr)
     return model

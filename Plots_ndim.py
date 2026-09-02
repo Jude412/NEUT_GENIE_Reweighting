@@ -323,7 +323,7 @@ def plot_training_history(model, output_file, title="Training history"):
 
     Only the models carrying an 'evals_result' method (the XGBoost ones) have such a history:
     nothing is written for the others, and False is returned."""
-    if not hasattr(model, "evals_result"):
+    if getattr(model, "evals_result_", None) is None:
         print(f"Warning: the model has no training history: {output_file} is not written.")
         return False
 
