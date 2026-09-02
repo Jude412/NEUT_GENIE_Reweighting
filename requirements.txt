@@ -10,3 +10,4 @@ snakemake
 xgboost
 pot
 tensorboard
+pyarrow

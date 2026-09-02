@@ -56,7 +56,8 @@ In the `models` section, you can specify
 - `selection_metric`: the metric by which to select the best hyperparameter set for each model
 
 In the `swd_bootstrapping` section, you can specify
-- `runs`: the number of bootstrapped samples to take from the target sample to form the SWD target distribution
+- `runs`: the number of times to call "Bootstrap_swd.py" per sample/topology/parameter set combination
+- `n_samples`: the number of samples to draw per run (total number of bootstraps is `runs` x `n_samples`)
 - `n_directions`: the number of directions to sample in the parameter space to calculate the SWD
 
 In the `output` section, you can specify
@@ -120,10 +121,6 @@ reweighted original sample matches the sum of the pre-weights of the target samp
 
 ## Samples
 
-The samples are created once per sample and topology by `Init.py`, which splits the events into a training, a
-validation and a test sample and writes them for every analysis parameter (the `all` set) and for every set listed
-in the `parameters/metric_sets` section of the config file, each in a sub-directory named after the set. The
-indices of the split are saved next to them, in `split_indices.json`. The samples holding the parameters the models
-are trained on (`parameters/reweighting`) are then obtained by `Splitting_script.py`, which simply keeps the
-corresponding columns of the `all` samples: the input files are only ever read once, and the split is never
-recomputed.
+The samples are created once per sample and topology by `Init.py`, which splits the events into a training, 
+a validation and a test sample. They are stored as partitioned parquet datasets in `saved_samples`,
+partitioned by topology (for quick loading of a single topology).

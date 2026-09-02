@@ -2,8 +2,9 @@
 This will assume that the input data is given as numpy arrays, already sorted in training and validation sets.
 The output will be the trained model, which can be used to predict the weights."""
 
-#imports 
+#imports
 import json
+import pickle
 import numpy as np
 from hep_ml import reweight
 from xgboost import XGBClassifier
@@ -204,6 +205,8 @@ def train_model(model_name, samples, hyperparameters):
 
     The dispatch between the models lives here, so that every script trains them the same way."""
     check_model(model_name)
+
+    # extract numpy arrays from the dataframes, and the pre-weights of the events
     original_train, original_train_weight = samples["original_train"]
     original_val, original_val_weight = samples["original_val"]
     target_train, target_train_weight = samples["target_train"]
@@ -214,10 +217,12 @@ def train_model(model_name, samples, hyperparameters):
                              hyperparameters["n_bins"], hyperparameters["n_neighs"],
                              original_train_weight=original_train_weight,
                              target_train_weight=target_train_weight)
+
     elif model_name == "XGB":
         return train_XGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
                          original_train_weight=original_train_weight, original_val_weight=original_val_weight,
                          target_train_weight=target_train_weight, target_val_weight=target_val_weight)
+
     return train_unnormXGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
                            original_train_weight=original_train_weight, original_val_weight=original_val_weight,
                            target_train_weight=target_train_weight, target_val_weight=target_val_weight)
@@ -229,7 +234,39 @@ def predict_model(model_name, model, original):
     target one: multiply them by the pre-weights of the events to get their absolute weights."""
     check_model(model_name)
     if model_name == "binning":
-        return predict_binning(model, original)
+        return predict_binning(model, original[0])
     elif model_name == "XGB":
-        return predict_XGB(original, model)
-    return predict_unnormXGB(original, model)
+        return predict_XGB(original[0], model)
+    return predict_unnormXGB(original[0], model)
+
+def save_model(model_name, model, path):
+    """Save a trained model to the given path (without extension), picking the serialization
+    format best suited to it.
+
+    'XGB' and 'unnormXGB' are saved in XGBoost's own model format, which stays readable across
+    XGBoost versions, unlike a pickled 'XGBClassifier'. The normalisation ratio 'XGB' carries as
+    an extra attribute is not part of that format by default, so it is stored as a booster
+    attribute beforehand, which XGBoost does persist. 'binning' has no such native format and is
+    pickled instead."""
+    check_model(model_name)
+    if model_name == "binning":
+        with open(path + ".pkl", "wb") as f:
+            pickle.dump(model, f)
+        return
+
+    if model_name == "XGB":
+        model.get_booster().set_attr(norm_ratio=str(model.norm_ratio))
+    model.save_model(path + ".json")
+
+def load_model(model_name, path):
+    """Load a model saved by 'save_model' from the given path (without extension)."""
+    check_model(model_name)
+    if model_name == "binning":
+        with open(path + ".pkl", "rb") as f:
+            return pickle.load(f)
+
+    model = XGBClassifier()
+    model.load_model(path + ".json")
+    if model_name == "XGB":
+        model.norm_ratio = float(model.get_booster().attr("norm_ratio"))
+    return model

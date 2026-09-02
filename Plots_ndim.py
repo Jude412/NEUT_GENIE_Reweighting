@@ -12,6 +12,7 @@ in the plots themselves."""
 
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib
 import ot
 from matplotlib.backends.backend_pdf import PdfPages
 import mplhep as mh
@@ -70,15 +71,15 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                 x_min = dict_binning[var]["x_min"]
                 x_max = dict_binning[var]["x_max"]
                 n_bins = dict_binning[var]["n_bins"]
-                bins = np.linspace(x_min, x_max, n_bins+1)
             else:
-                x_min = None
-                x_max = None
                 first_percentile = np.percentile(target[:, i], 1)
                 if np.abs(first_percentile) < 5e-2:
                     first_percentile = 0
                 ninety_ninth_percentile = np.percentile(target[:, i], 99)
-                bins = np.linspace(first_percentile, ninety_ninth_percentile, 31)
+                x_min = first_percentile
+                x_max = ninety_ninth_percentile
+                n_bins = 30
+            bins = np.linspace(x_min, x_max, n_bins+1)
 
             bin_centers = 0.5 * (bins[:-1] + bins[1:])
 
@@ -250,7 +251,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
 
                         pull_masked = np.ma.masked_where(sigma == 0, hist_pull)
                         # colormap with white for masked
-                        cmap = plt.cm.coolwarm.copy()
+                        cmap = matplotlib.colormaps['coolwarm']
                         cmap.set_bad(color='white')
 
                         # symmetric color scale around 0
@@ -264,7 +265,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                             normalized_pull.T,
                             origin='lower',
                             aspect='auto',
-                            extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
+                            extent=(x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]),
                             cmap=cmap,
                             vmin=vmin,
                             vmax=vmax
@@ -287,7 +288,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         ratio_masked = np.ma.masked_where(hist_target == 0, ratio)
 
                         # colormap with white for masked
-                        cmap = plt.cm.coolwarm.copy()
+                        cmap = matplotlib.colormaps['coolwarm']
                         cmap.set_bad(color='white')
 
                         # symmetric color scale around 1
@@ -301,7 +302,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                             ratio_delta.T,
                             origin='lower',
                             aspect='auto',
-                            extent=[x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]],
+                            extent=(x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]),
                             cmap=cmap,
                             vmin=vmin,
                             vmax=vmax

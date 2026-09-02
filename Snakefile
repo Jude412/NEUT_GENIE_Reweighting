@@ -7,10 +7,10 @@ import re
 
 from List_hyperparameters import number_of_sets
 from Split_sizes import minimum_events
+from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
-DIM = len(config["parameters"]["reweighting"])
 MODELS = config["models"]["model_list"]
 GRID_FILE = config["models"]["grid_file"]
 # The number of fine-tuning runs of a model is the size of its hyperparameter grid, so that the
@@ -29,8 +29,6 @@ RUNS = range(config["swd_bootstrapping"]["runs"])
 # config file is enough to have its samples, bootstrapped SWD distribution and metrics produced.
 # ---------------------------------------------------------------------------
 
-ALL_PARAMS_SET = "all"
-REWEIGHTING_SET = f"custom_{DIM}D"
 METRIC_SETS = dict(config["parameters"].get("metric_sets") or {})
 # Sets written by the initialisation, i.e. every set but the reweighting one, whose samples are
 # obtained by keeping the reweighting parameters of the 'all' samples.
@@ -75,6 +73,14 @@ def get_samples():
 
 SAMPLES = get_samples()
 
+def get_param_set_dict():
+    dict = METRIC_SETS.copy()
+    dict[ALL_PARAMS_SET] = config["parameters"]["all"]
+    dict[REWEIGHTING_SET] = config["parameters"]["reweighting"]
+    return dict
+
+PARAM_SET_DICT = get_param_set_dict()
+
 # ---------------------------------------------------------------------------
 # Input functions – resolve the single .root file inside a leaf directory.
 # ---------------------------------------------------------------------------
@@ -91,6 +97,7 @@ def target_file_for(wildcards):
 # Per-sample path helpers
 # ---------------------------------------------------------------------------
 
+BASE_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/"
 INIT_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/{{topology}}/"
 INIT_SWD_DIR     = f"saved_swd_distribution/{TAG}/{{sample}}/{{topology}}/"
 SAMPLES_DIR      = INIT_SAMPLES_DIR + f"{REWEIGHTING_SET}/"
@@ -107,12 +114,10 @@ def swd_distribution_file(param_set):
     return INIT_SWD_DIR + f"{param_set}/swd_distribution_{param_set}.npy"
 
 # Command line arguments naming a set of parameters and the path it is given as, as the scripts
-# computing the metrics take them ('--sample_dir 3D path/to/3D/ --sample_dir 8D path/to/8D/ ...').
+# computing the metrics take their bootstrapped SWD distributions ('--swd_distribution 3D path/to/3D.npy
+# --swd_distribution 8D path/to/8D.npy ...').
 def named_paths_flags(flag, paths):
     return " ".join(f"{flag} {param_set} {path}" for param_set, path in paths.items())
-
-def sample_dirs_of(param_sets):
-    return {param_set: INIT_SAMPLES_DIR + f"{param_set}/" for param_set in param_sets}
 
 def swd_distributions_of(param_sets):
     return {param_set: swd_distribution_file(param_set) for param_set in param_sets}
@@ -148,28 +153,14 @@ MIN_EVENTS_PER_TOPOLOGY = minimum_events(
 )
 # The counts of all topologies are gathered in a single per-sample file (no {topology} wildcard),
 # as they are all obtained from one pass over the ROOT files of the sample.
-TOPOLOGY_COUNTS_FILE = f"saved_samples/{TAG}/{{sample}}/topology_counts.json"
+INCLUDED_TOPOLOGIES_FILE = f"saved_samples/{TAG}/{{sample}}/included_topologies.json"
 
 def topologies_for_sample(sample):
     """Return the topologies of the config file that hold enough events in a given sample."""
-    with open(checkpoints.count_topologies.get(sample=sample).output.counts_file) as f:
-        counts = json.load(f)
-
-    kept = []
-    for topology in TOPOLOGIES:
-        n_original = counts["original"][str(topology)]
-        n_target = counts["target"][str(topology)]
-        if n_original < MIN_EVENTS_PER_TOPOLOGY or n_target < MIN_EVENTS_PER_TOPOLOGY:
-            print(
-                f"Warning: topology {topology} of sample {sample} holds {n_original} original event(s) "
-                f"and {n_target} target event(s). Topologies with less than {MIN_EVENTS_PER_TOPOLOGY} "
-                "events in either the original or the target sample cannot be split into training, "
-                "validation and test samples: no training will be carried out for this topology in this sample."
-            )
-            continue
-        kept.append(topology)
-
-    return kept
+    with open(checkpoints.initialize_analysis.get(sample=sample).output.included_topologies) as f:
+        included_topologies = json.load(f)
+    
+    return included_topologies
 
 def all_metrics_files(wildcards):
     return [
@@ -185,37 +176,7 @@ def all_figure_dirs(wildcards):
         for topology in topologies_for_sample(sample)
     ]
 
-checkpoint count_topologies:
-    input:
-        original_file=original_file_for,
-        target_file=target_file_for
-
-    params:
-        modes=MODES,
-        topologies=TOPOLOGIES,
-        original_tree=config["inputs"]["original_tree"],
-        target_tree=config["inputs"]["target_tree"],
-
-    output:
-        counts_file=TOPOLOGY_COUNTS_FILE
-
-    conda:
-        ENV
-
-    shell:
-        """
-        python Count_topologies.py \
-            --input_file_original {input.original_file} \
-            --input_file_target {input.target_file} \
-            --input_tree_original {params.original_tree} \
-            --input_tree_target {params.target_tree} \
-            --modes {params.modes} \
-            --topologies {params.topologies} \
-            --output_file {output.counts_file}
-        """
-
-
-rule initialize_analysis:
+checkpoint initialize_analysis:
     input:
         original_file=original_file_for,
         target_file=target_file_for
@@ -226,18 +187,13 @@ rule initialize_analysis:
         target_tree=config["inputs"]["target_tree"],
         train_percentage=config["analysis"]["train_percentage"],
         val_percentage=config["analysis"]["val_percentage"],
-        analysis_params=config["parameters"]["all"],
-        # One '--param_set NAME param1 param2 ...' argument per configured set of parameters.
-        # The 'all' set is always written by the script itself.
-        param_sets=" ".join(
-            f"--param_set {name} {' '.join(str(p) for p in params)}"
-            for name, params in METRIC_SETS.items()
-        ),
-        samples_dir=INIT_SAMPLES_DIR
+        analysis_params=PARAM_SET_DICT[ALL_PARAMS_SET],
+        topologies=TOPOLOGIES,
+        samples_dir=BASE_SAMPLES_DIR
 
     output:
-        last_sampled_files=expand(INIT_SAMPLES_DIR + "{param_set}/target_test.csv", param_set=INIT_SETS, allow_missing=True),
-        split_indices=INIT_SAMPLES_DIR + "split_indices.json"
+        last_sampled_files=directory(BASE_SAMPLES_DIR + "target_test.parquet"),
+        included_topologies=INCLUDED_TOPOLOGIES_FILE
 
     conda:
         ENV
@@ -250,37 +206,40 @@ rule initialize_analysis:
             --input_tree_original {params.original_tree} \
             --input_tree_target {params.target_tree} \
             --analysis_params {params.analysis_params} \
-            {params.param_sets} \
             --modes {params.modes} \
-            --topologies {wildcards.topology} \
+            --topologies {params.topologies} \
             --train_percentage {params.train_percentage} \
             --val_percentage {params.val_percentage} \
             --output_dir {params.samples_dir} \
-            --indices_file {output.split_indices}
+            --topologies_file {output.included_topologies} \
         """
-
 
 # The bootstrapped SWD distribution of every set of analysis parameters is obtained the same way,
 # whether its samples were written by the initialisation or by the reweighting split: a single
 # pair of rules covers them all, with the set named by the {param_set} wildcard.
 rule run_bootstrap:
     input:
-        target_test=INIT_SAMPLES_DIR + "{param_set}/target_test.csv"
+        target_test=BASE_SAMPLES_DIR + "target_test.parquet"
     output:
         output_file=INIT_SWD_DIR + "{param_set}/indiv_bootstrap/run_{run_id}.npy"
     params:
-        n_directions=config["swd_bootstrapping"]["n_directions"]
+        n_directions=config["swd_bootstrapping"]["n_directions"],
+        param_set=lambda wc: PARAM_SET_DICT[wc.param_set],
+        n_bootstrap=config["swd_bootstrapping"]["n_samples"]
     conda:
         ENV
     shell:
         """
         python Bootstrap_swd.py \
             --distribution {input.target_test} \
+            --topology {wildcards.topology} \
+            --param_set {params.param_set} \
             --output_dir $(dirname {output.output_file})/ \
             --output_file {output.output_file} \
+            --n_bootstrap {params.n_bootstrap} \
             --n_directions {params.n_directions} \
             --random_seed {wildcards.run_id}
-        """
+        """ 
 
 rule aggregate_bootstrap:
     input:
@@ -299,33 +258,6 @@ rule aggregate_bootstrap:
             --output {output.final_file}
         """
 
-
-rule custom_dim_analysis:
-    input:
-        # The samples holding every analysis parameter are already split by 'initialize_analysis':
-        # the parameters of interest are simply kept from them, so that the events of a given sample
-        # are exactly the ones the initialisation put in it.
-        # The last sample written by the initialisation is requested alongside its directory, as the
-        # timestamp of a directory does not follow the files it holds: it is not passed to the script.
-        last_init_sampled_file=INIT_SAMPLES_DIR + "all/target_test.csv"
-
-    params:
-        init_samples_dir=INIT_SAMPLES_DIR + "all/",
-        parameters_interest=config["parameters"]["reweighting"],
-        tag=config["output"]["tag"]
-
-    output:
-        samples_dir=directory(SAMPLES_DIR),
-        last_sampled_file=SAMPLES_DIR + "target_test.csv"
-    conda:
-        ENV
-    shell:
-        """
-        python Splitting_script.py \
-            --init_samples_dir {params.init_samples_dir} \
-            --parameters_interest {params.parameters_interest} \
-            --samples_dir {output.samples_dir}
-        """
 
 rule prepare_hps:
     input:
@@ -346,21 +278,19 @@ rule prepare_hps:
 
 rule single_fine_tuning:
     input:
-        last_sampled_file=SAMPLES_DIR + "target_test.csv",
-        last_sampled_files=expand(INIT_SAMPLES_DIR + "{param_set}/target_test.csv",
-                                   param_set=PARAM_SETS, allow_missing=True),
+        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
         hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json",
         swd_distributions=expand(INIT_SWD_DIR + "{param_set}/swd_distribution_{param_set}.npy",
                                  param_set=PARAM_SETS, allow_missing=True)
 
     params:
-        train_samples_dir=SAMPLES_DIR,
-        model="{model}",
-        logdir=TENSORBOARD_DIR + "{model}/",
+        sample_dir=BASE_SAMPLES_DIR,
+        model=lambda wc: wc.model,
+        logdir=lambda wc: TENSORBOARD_DIR + wc.model + "/",
         binning_file=config["parameters"]["binning_file"],
-        sample_dir_flags=named_paths_flags("--sample_dir", sample_dirs_of(PARAM_SETS)),
-        swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS)),
-        n_directions=config["swd_bootstrapping"]["n_directions"]
+        n_directions=config["swd_bootstrapping"]["n_directions"],
+        param_set_dict=json.dumps(PARAM_SET_DICT),
+        swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS))
 
     output:
         output_file=TENSORBOARD_DIR + "{model}/run_{run_id}_metrics.csv"
@@ -371,13 +301,14 @@ rule single_fine_tuning:
     shell:
         """
         python Fine_tuning.py \
-            --train_sample_dir {params.train_samples_dir} \
-            {params.sample_dir_flags} \
-            {params.swd_distribution_flags} \
+            --sample_dir {params.sample_dir} \
             --model {params.model} \
+            --topology {wildcards.topology} \
+            {params.swd_distribution_flags} \
             --hyperparameters {input.hparam_file} \
             --logdir {params.logdir} \
             --n_directions {params.n_directions} \
+            --param_set_dict '{params.param_set_dict}' \
             --binning_file {params.binning_file} \
             --output_file {output.output_file}
         """
@@ -413,23 +344,24 @@ rule fine_tuning:
 
 rule train_models:
     input:
-        samples_dir=SAMPLES_DIR,
         hparam_file=f"set_hyperparameters/{TAG}/{{sample}}/{{topology}}/hyperparameters.json",
-        last_sampled_file=SAMPLES_DIR + "target_test.csv"
-
+        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet"
     params:
+        samples_dir=BASE_SAMPLES_DIR,
         model_list=MODELS,
         model_dir=MODEL_DIR,
-        weights_dir=WEIGHTS_DIR
+        weights_dir=WEIGHTS_DIR,
+        param_set=PARAM_SET_DICT[REWEIGHTING_SET]
     output:
         save_path_dict=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
-
     conda:
         ENV
     shell:
         """
         python Training.py \
-            --sample_dir {input.samples_dir} \
+            --sample_dir {params.samples_dir} \
+            --topology {wildcards.topology} \
+            --param_set {params.param_set} \
             --hparams_dict {input.hparam_file} \
             --save_weights_path {params.weights_dir} \
             --save_model_path {params.model_dir} \
@@ -440,8 +372,7 @@ rule train_models:
 
 rule compute_metrics:
     input:
-        last_sampled_files=expand(INIT_SAMPLES_DIR + "{param_set}/target_test.csv",
-                                  param_set=PARAM_SETS, allow_missing=True),
+        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
         weights_path=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json",
         swd_distributions=expand(INIT_SWD_DIR + "{param_set}/swd_distribution_{param_set}.npy",
                                  param_set=PARAM_SETS, allow_missing=True)
@@ -451,9 +382,10 @@ rule compute_metrics:
 
     params:
         binning_file=config["parameters"]["binning_file"],
-        sample_dir_flags=named_paths_flags("--sample_dir", sample_dirs_of(PARAM_SETS)),
+        sample_dir=BASE_SAMPLES_DIR,
         swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS)),
-        n_directions=config["swd_bootstrapping"]["n_directions"]
+        n_directions=config["swd_bootstrapping"]["n_directions"],
+        param_set_dict=json.dumps(PARAM_SET_DICT)
 
     conda:
         ENV
@@ -461,8 +393,10 @@ rule compute_metrics:
     shell:
         """
         python Calc_Metrics.py \
-            {params.sample_dir_flags} \
+            --sample_dir {params.sample_dir} \
             {params.swd_distribution_flags} \
+            --param_set_dict '{params.param_set_dict}' \
+            --topology {wildcards.topology} \
             --weights_paths {input.weights_path} \
             --output_file {output.metrics_file} \
             --compute_chi2 \
@@ -473,16 +407,14 @@ rule compute_metrics:
 
 rule make_plots:
     input:
-        last_sampled_file_1D=INIT_SAMPLES_DIR + f"{ALL_PARAMS_SET}/target_test.csv",
-        last_sampled_file_2D=SAMPLES_DIR + "target_test.csv",
+        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
         weights_path=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
 
     output:
         histograms_1D=FIG_DIR + "1Dhist.pdf"
 
     params:
-        sample_dir_1D=INIT_SAMPLES_DIR + f"{ALL_PARAMS_SET}/",
-        sample_dir_2D=SAMPLES_DIR,
+        sample_dir=BASE_SAMPLES_DIR,
         binning_file=config["parameters"]["binning_file"],
         output_dir=FIG_DIR
 
@@ -492,8 +424,8 @@ rule make_plots:
     shell:
         """
         python Make_plots.py \
-            --sample_dir_1D {params.sample_dir_1D} \
-            --sample_dir_2D {params.sample_dir_2D} \
+            --sample_dir {params.sample_dir} \
+            --topology {wildcards.topology} \
             --weights_paths {input.weights_path} \
             --output_dir {params.output_dir} \
             --make_1D_plots \
@@ -505,17 +437,17 @@ rule all:
     input:
         # The counts are requested explicitly so that every sample is scanned in one go,
         # rather than one sample at a time as the checkpoints get resolved.
-        counts_files=expand(TOPOLOGY_COUNTS_FILE, sample=SAMPLES),
+        included_topologies_files=expand(INCLUDED_TOPOLOGIES_FILE, sample=SAMPLES),
         metrics_files=all_metrics_files,
         figures=all_figure_dirs
 
 # Wildcard-free target running only the topology counting checkpoint on every sample.
-# The 'count_topologies' checkpoint itself carries a {sample} wildcard and so cannot be
+# The 'initialize_analysis' checkpoint itself carries a {sample} wildcard and so cannot be
 # asked for on the command line; ask for this rule instead:
 #     snakemake count_all_topologies --cores 8
 # Running it first makes the counts available to the checkpoints, so that a subsequent
 # dry run ('snakemake all -n') can resolve them and list every job of the workflow.
 rule count_all_topologies:
     input:
-        counts_files=expand(TOPOLOGY_COUNTS_FILE, sample=SAMPLES)
+        counts_files=expand(INCLUDED_TOPOLOGIES_FILE, sample=SAMPLES)
 

@@ -81,8 +81,8 @@ def chi2_p_value(chi2, dof):
     return p_value
 
 def compute_swd(original, target, weights_dict, target_weights = None, n_directions=500):
-    #we compute the Sliced Wasserstein Distance between the original and target distributions, using the weights for the original distribution.
-    #we project the distributions on a given number of random vectors in the unitary sphere, and we compute the wasserstein distance for each projection,
+    # We compute the Sliced Wasserstein Distance between the original and target distributions, using the weights for the original distribution.
+    # We project the distributions on a given number of random vectors in the unitary sphere, and we compute the wasserstein distance for each projection,
     #then we average them.
     v = np.random.normal(0, 1, size = (n_directions, original.shape[1]))
     v /= np.linalg.norm(v, axis = 1)[:, np.newaxis]
@@ -112,21 +112,22 @@ def compute_swd(original, target, weights_dict, target_weights = None, n_directi
 """We then use this function to compute a p-value for the swd we obtained with a given swd distribution 
 obtained from bootstraping the target distribution with the Bootstrap_SWD function.  """
 
-def bootstrap_swd(target, n_bootstrap=1000, n_directions=500, target_weights = None):
+def bootstrap_swd(target, n_bootstrap=1000, n_directions=500):
     """Returns a list of SWD values obtained by bootstraping the target distribution and computing the SWD between the two bootstraped distributions."""
     list_swd = []
 
+    target_dist, target_weights = target
+
     for _ in range(n_bootstrap):
-        index1 = np.random.choice(target.shape[0], size=target.shape[0], replace=True)
-        index2 = np.random.choice(target.shape[0], size=target.shape[0], replace=True)
-        target_bootstrap_1 = target[index1]
-        target_bootstrap_2 = target[index2]
+        index1 = np.random.choice(target_dist.shape[0], size=target_dist.shape[0], replace=True)
+        index2 = np.random.choice(target_dist.shape[0], size=target_dist.shape[0], replace=True)
+        target_bootstrap_1 = target_dist[index1]
+        target_bootstrap_2 = target_dist[index2]
 
-        if target_weights is not None:
-            target_weights_bootstrap_1 = target_weights[index1]
-            target_weights_bootstrap_2 = target_weights[index2]
+        target_weights_bootstrap_1 = target_weights[index1]
+        target_weights_bootstrap_2 = target_weights[index2]
 
-        v = np.random.normal(0, 1, size = (n_directions, target.shape[1]))
+        v = np.random.normal(0, 1, size = (n_directions, target_dist.shape[1]))
         v /= np.linalg.norm(v, axis = 1)[:, np.newaxis]
 
         list_wass = []
@@ -134,20 +135,20 @@ def bootstrap_swd(target, n_bootstrap=1000, n_directions=500, target_weights = N
         for vector in v:
             #we project our nd distribution on the random vector, and we compute the wasserstein distance for 
             #each reweighting method on the projected distribution.
-            
+
             first_proj = np.dot(target_bootstrap_1, vector)
             #print(orig_proj.shape)
             second_proj = np.dot(target_bootstrap_2, vector)
             w_dist = ot.wasserstein_1d(first_proj, second_proj, 
-                                       u_weights = target_weights_bootstrap_1/np.sum(target_weights_bootstrap_1) if target_weights is not None else np.ones_like(target_bootstrap_1[:, 0])/len(target_bootstrap_1),
-                                       v_weights = target_weights_bootstrap_2/np.sum(target_weights_bootstrap_2) if target_weights is not None else np.ones_like(target_bootstrap_2[:, 0])/len(target_bootstrap_2))
+                                       u_weights = target_weights_bootstrap_1/np.sum(target_weights_bootstrap_1),
+                                       v_weights = target_weights_bootstrap_2/np.sum(target_weights_bootstrap_2)
+                                       )
 
             list_wass.append(w_dist)
-        
-        list_swd.append(np.mean(list_wass))
-        
-    return list_swd
 
+        list_swd.append(np.mean(list_wass))
+
+    return list_swd
 
 
 def compute_p_value(swd_value_dict, swd_distribution):

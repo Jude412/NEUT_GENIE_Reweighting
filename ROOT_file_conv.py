@@ -4,49 +4,20 @@ return an array containing the desired parameters of interest. They are to be gi
 import numpy as np
 import uproot
 import awkward as ak
+import pandas as pd
 from typing import cast
-from Sample_io import WEIGHT_COLUMN
+from Constants import WEIGHT_COLUMN, TOPOLOGY_COLUMN, TOPOLOGY_CODES, topology_code
 
 # Branches to read in
 BRANCHES = ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep", "fScaleFactor", "RWWeight"]
 # Branches whose product gives the total weight of an event.
 WEIGHT_BRANCHES = ("RWWeight", "fScaleFactor")
 
-# Mapping between the topology names (used in the config file and as the {topology} wildcard
-# of the workflow) and the integer values stored in the "Topology" parameter.
-TOPOLOGY_CODES = {
-    "CC0pi": 0,
-    "CC1pipm": 1,
-    "CC1pi0": 2,
-    "CCNpi": 3,
-    "CCOther": 4,
-    "NC0pi": 5,
-    "NC1pipm": 6,
-    "NC1pi0": 7,
-    "NCNpi": 8,
-    "NCOther": 9,
-    "Other": 10,
-}
-
-def topology_code(topology):
-    """Return the integer code of a topology given either its name (ex: 'CC1pipm') or its code (ex: 1)."""
-    if isinstance(topology, str):
-        if topology in TOPOLOGY_CODES:
-            return TOPOLOGY_CODES[topology]
-        try:
-            topology = int(topology)
-        except ValueError:
-            raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
-    if topology not in TOPOLOGY_CODES.values():
-        raise ValueError(f"Unknown topology '{topology}'. Please choose from {list(TOPOLOGY_CODES)}.")
-    return int(topology)
-
-def convert_input_file(input_file, input_tree, analysis_params, modes = None, topologies = None, return_weights = False):
-    """This function takes as input a ROOT FlatTree from and returns an array containing all the parameters of interest."""
+def convert_input_file(input_file, input_tree, analysis_params, modes = None) -> pd.DataFrame:
+    """This function takes as input a ROOT FlatTree from and returns a dataframe containing all the parameters of interest."""
     # Open the ROOT file
     file = uproot.open(input_file)
     tree = cast(uproot.TTree, file[input_tree]).arrays(BRANCHES, library="ak")
-    
 
     # Per-event weight: the total weight of an event is the product of its reweighting weight and of its scale factor.
     if WEIGHT_BRANCHES[0] in tree.fields and WEIGHT_BRANCHES[1] in tree.fields:
@@ -144,33 +115,29 @@ def convert_input_file(input_file, input_tree, analysis_params, modes = None, to
         f"{ak.sum(mask_sum > 1)} events matched multiple."
     )
 
-    tree["Topology"] = ak.full_like(tree["Mode"], topology_code("Other"), dtype=np.int64)  # sensible default
+    tree[TOPOLOGY_COLUMN] = ak.full_like(tree["Mode"], topology_code("Other"), dtype=np.int64)  # sensible default
     for top in topology_masks.keys():
-        tree["Topology"] = ak.where(topology_masks[top], topology_code(top), tree["Topology"])
+        tree[TOPOLOGY_COLUMN] = ak.where(topology_masks[top], topology_code(top), tree[TOPOLOGY_COLUMN])
 
-    # We now cut the tree to the desired topologies if specified
-    if topologies is not None:
-        mask = False
-        for top in topologies:
-            mask = mask | (tree["Topology"] == topology_code(top))
+    # we now create the final dataframe containing the parameters of interest. The topology is
+    # always kept, even when not listed in 'analysis_params': it is never a parameter itself, but
+    # every sample is partitioned on it so that an individual topology can be read back directly.
+    columns_to_write = list(analysis_params) + [WEIGHT_COLUMN]
+    if TOPOLOGY_COLUMN not in columns_to_write:
+        columns_to_write.append(TOPOLOGY_COLUMN)
 
-        tree = tree[mask]
+    # check for missing/NaN/infinite values
+    for field in columns_to_write:
+        if field not in tree.fields:
+            raise ValueError(f"Field '{field}' not found in the ROOT tree. Available fields: {list(tree.fields)}")
+        x = ak.fill_none(tree[field], np.nan)  # None -> NaN, now one check covers both
+        bad_mask = np.isnan(x) | np.isinf(x)
+        if ak.any(bad_mask):
+            num_bad = ak.sum(bad_mask)
+            print(f"Warning: {num_bad} out of {len(tree)} events have missing/NaN/infinite values in field '{field}'. They will be removed.")
+            tree = tree[~bad_mask]
 
-    # we now create the final array containing the parameters of interest
-    # The weights are carried along as an extra column, so that the NaN cleaning below removes the same
-    # events from the parameters and from the weights.
-    columns = list(analysis_params) + ([WEIGHT_COLUMN] if return_weights else [])
-    param_values = []
-    for param in columns:
-        param_values.append(ak.to_numpy(tree[param]))
-    data = np.array(np.column_stack(param_values))
-    ## Check for NaN
-    for i in range(data.shape[1]):
-        if np.isnan(data[:, i]).any():
-            print(f"Warning: NaN values found in column {i} of the data array.")
-            data = data[~np.isnan(data[:, i])].copy()
-        else:
-            pass
-    if return_weights:
-        return data[:, :-1], data[:, -1]
+    tree = tree[columns_to_write]
+
+    data = cast(pd.DataFrame, ak.to_dataframe(tree))
     return data
