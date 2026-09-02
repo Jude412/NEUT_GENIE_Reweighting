@@ -65,10 +65,10 @@ parameters:
     - W
     - PTlep
   
-  # parameters to compute the metrics on (along with the reweighting parameters)
+  # parameters to compute the metrics on (along with the reweighting parameters).
   all: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav",
-        "W", "y", "Mode", "Topology", "cc", "N_n", "K_n", 
-        "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
+        "W", "y", "Mode", "cc", "N_n", "K_n", "N_p", "K_p", "N_pi0", "K_pi0", 
+        "N_pip", "K_pip", "N_pim", "K_pim"]
 
   # Sets of parameters the metrics are computed on, each named by its key. Samples, bootstrapped
   # SWD distributions and metrics are produced for every set listed here.
@@ -106,10 +106,12 @@ models:
       direction: min
 
 swd_bootstrapping:
-  runs: 50
+  runs: 8
+  n_samples: 100
   n_directions: 50
-  # runs: 200
+  # runs: 50
+  # n_samples = 5
   # n_directions: 500
 
 output:
-  tag: "test_newrepo2"
+  tag: "test_newrepo3"

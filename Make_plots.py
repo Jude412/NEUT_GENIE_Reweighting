@@ -9,18 +9,17 @@ the plots are computed by 'Metrics_ndim.py', and the ones written to disk by 'Ca
 import os
 
 from Plots_ndim import labels_of, plot_2D_histogram, plot_histograms, plot_training_history
-from Sample_io import load_sample, sample_columns
+from Sample_io import load_sample, sample_params
+from Train_predict import load_model
 import numpy as np
 import argparse
 import json
-import pickle
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description='Plot the reweighted distributions of the different reweighting methods.')
-    argparser.add_argument('--sample_dir_1D', type=str, required=True,
+    argparser.add_argument('--sample_dir', type=str, required=True,
                            help='Directory holding the samples the 1D histograms are made from (usually the samples of every analysis parameter).')
-    argparser.add_argument('--sample_dir_2D', type=str, required=False,
-                           help='Directory holding the samples the 2D histograms are made from (usually the samples of the parameters the models are trained on).')
+    argparser.add_argument('--topology', type=str, required=True, help='The topology to filter the samples on.')
     argparser.add_argument('--weights_paths', type=str, required=True,
                            help="Path to the json file holding, for each method, the paths to its predicted weights and to its model.")
     argparser.add_argument('--output_dir', type=str, required=True, help='Directory to save the plots in.')
@@ -45,17 +44,18 @@ if __name__ == "__main__":
 
         The trained weights take the pre-weighted original distribution to the pre-weighted target one,
         so they are multiplied by the pre-weights of the events."""
-        weights_dict = {method: np.loadtxt(paths["weights"], delimiter=",")*original_weight
+        weights_dict = {method: np.load(paths["weights"])*original_weight
                         for method, paths in saved_paths.items()}
         weights_dict['Original'] = original_weight
         return weights_dict
 
-    if args.make_1D_plots:
-        original_file = os.path.join(args.sample_dir_1D, "original_test.csv")
-        original_test, original_test_weight = load_sample(original_file)
-        target_test, target_test_weight = load_sample(os.path.join(args.sample_dir_1D, "target_test.csv"))
-        params = sample_columns(original_file)
+    original_file = os.path.join(args.sample_dir, "original_test.parquet")
+    target_file = os.path.join(args.sample_dir, "target_test.parquet")
+    original_test, original_test_weight = load_sample(original_file, topology=args.topology)
+    target_test, target_test_weight = load_sample(target_file, topology=args.topology)
+    params = sample_params(original_file)
 
+    if args.make_1D_plots:
         plot_histograms(original_test, target_test, weights_of(original_test_weight),
                         dict_binning=binning_dict,
                         original_weights=original_test_weight,
@@ -65,14 +65,6 @@ if __name__ == "__main__":
                         output_file=os.path.join(args.output_dir, "1Dhist.pdf"))
 
     if args.make_2D_plots:
-        if args.sample_dir_2D is None:
-            raise ValueError("The 2D histograms were asked for without a '--sample_dir_2D' to make them from.")
-
-        original_file = os.path.join(args.sample_dir_2D, "original_test.csv")
-        original_test, original_test_weight = load_sample(original_file)
-        target_test, target_test_weight = load_sample(os.path.join(args.sample_dir_2D, "target_test.csv"))
-        params = sample_columns(original_file)
-
         plot_2D_histogram(original_test, target_test, weights_of(original_test_weight),
                           target_weights=target_test_weight,
                           xlabels=labels_of(params),
@@ -82,8 +74,7 @@ if __name__ == "__main__":
 
     if args.make_training_history:
         for method, paths in saved_paths.items():
-            with open(paths["model"], "rb") as f:
-                model = pickle.load(f)
+            model = load_model(method, paths["model"])
             plot_training_history(model, os.path.join(args.output_dir, f"{method}_training_history.pdf"),
                                   title=f"Training history of {method}")
 
