@@ -35,6 +35,7 @@ if __name__ == "__main__":
 
     samples = load_samples(args.sample_dir, topology=args.topology, params=args.param_set)
     n_params = len(args.param_set)
+    print(n_params, "parameters used for training:", args.param_set)
 
     os.makedirs(args.save_weights_path, exist_ok=True)
     os.makedirs(args.save_model_path, exist_ok=True)
@@ -45,7 +46,7 @@ if __name__ == "__main__":
         model = train_model(model_name, samples, hyperparams)
 
         for sample_name in PREDICTED_SAMPLES:
-            weights = predict_model(model_name, model, samples[sample_name][0])
+            weights = predict_model(model_name, model, samples[sample_name])
             # The name of the sample the weights belong to is kept as it was, so that
             # 'original_test' gives the historical 'weights_test' file name.
             split = sample_name.split("_")[-1]
