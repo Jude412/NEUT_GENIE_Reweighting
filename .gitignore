@@ -20,3 +20,11 @@ testing.ipynb
 batch/
 __pycache__/
 hps/
+
+# Condor job logs and Snakemake benchmark TSVs
+logs/
+benchmarks/
+
+# Condor job logs and Snakemake benchmark TSVs
+logs/
+benchmarks/

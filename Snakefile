@@ -109,6 +109,13 @@ METRICS_DIR      = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/{REWEIGHTING_SE
 HPS_DIR          = f"hps/{TAG}/"
 TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{{topology}}/{REWEIGHTING_SET}/"
 
+# Benchmarks hold the peak memory and wall time of every submitted job, and are what the
+# resource requests of the rules are calibrated from. They mirror the wildcards of the rule
+# that wrote them.
+BASE_BENCH_DIR   = f"benchmarks/{TAG}/{{sample}}/"
+INIT_BENCH_DIR   = BASE_BENCH_DIR + "{topology}/"
+BENCH_DIR        = INIT_BENCH_DIR + f"{REWEIGHTING_SET}/"
+
 # The bootstrapped SWD distribution of a set of parameters, whichever rule wrote its samples.
 def swd_distribution_file(param_set):
     return INIT_SWD_DIR + f"{param_set}/swd_distribution_{param_set}.npy"
@@ -138,21 +145,6 @@ wildcard_constraints:
     param_set="|".join(re.escape(str(s)) for s in PARAM_SETS),
     run_id=r"\d+"
 
-# ---------------------------------------------------------------------------
-# Topology filtering
-# A topology holding too few events cannot be split into training, validation
-# and test samples, so it is skipped for the sample it is too sparse in.
-# The minimum depends on the configured split percentages: with the default
-# 40%/40% split, 3 events are needed (2 events would give int(0.4*2) = 0
-# training and 0 validation events).
-# The same topology is still trained on in the samples where it is filled.
-# ---------------------------------------------------------------------------
-
-MIN_EVENTS_PER_TOPOLOGY = minimum_events(
-    config["analysis"]["train_percentage"], config["analysis"]["val_percentage"]
-)
-# The counts of all topologies are gathered in a single per-sample file (no {topology} wildcard),
-# as they are all obtained from one pass over the ROOT files of the sample.
 INCLUDED_TOPOLOGIES_FILE = f"saved_samples/{TAG}/{{sample}}/included_topologies.json"
 
 def topologies_for_sample(sample):
@@ -176,6 +168,36 @@ def all_figure_dirs(wildcards):
         for topology in topologies_for_sample(sample)
     ]
 
+# ---------------------------------------------------------------------------
+# Batch system execution
+# With the 'profiles/condor' profile every job is submitted to HTCondor by
+# cluster/condor_submit.py, which turns 'threads' into request_cpus and the 'mem_mb' and
+# 'runtime' resources into request_memory and +MaxRuntime. Four things follow.
+#
+#  - Rules whose work takes a fraction of a second are exempted from submission and run on the
+#    submission host instead, as the round trip costs far more than the work. Rules with no
+#    shell command ('all', 'count_all_topologies') are already local without being listed, and
+#    a rule in a 'group' is never local whatever else is said about it.
+#  - 'threads' is capped by the profile's 'cores' value: a rule asking for more is silently
+#    given 'cores' instead. Raise 'cores' before raising a rule's threads past it.
+#  - Both memory and runtime are scaled by the retry attempt, so that a job killed for
+#    exceeding its memory, or held for exceeding +MaxRuntime, costs one resubmission (the
+#    profile sets --retries) rather than the whole workflow.
+#  - Rules carrying a 'group' are bundled into shared submissions, sized by the profile's
+#    'group-components'. Grouped jobs of one component all run on a single node.
+# ---------------------------------------------------------------------------
+
+localrules: prepare_hps, fine_tuning, aggregate_bootstrap
+
+def scaled(base):
+    """A resource that grows with the retry attempt: base, then 2*base, then 3*base."""
+    return lambda wildcards, attempt: base * attempt
+
+
+# ROOT_file_conv.convert_input_file reads a whole file into memory and Init.py holds the
+# original while it converts the target, so this rule's memory scales with the input file
+# rather than with the topology. At 40M events per file it needs tens of GB; the value
+# here is for the 200k-event test files only.
 checkpoint initialize_analysis:
     input:
         original_file=original_file_for,
@@ -194,6 +216,15 @@ checkpoint initialize_analysis:
     output:
         last_sampled_files=directory(BASE_SAMPLES_DIR + "target_test.parquet"),
         included_topologies=INCLUDED_TOPOLOGIES_FILE
+
+    threads: 1
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(15),
+        disk_mb=10000
+
+    benchmark:
+        BASE_BENCH_DIR + "initialize_analysis.tsv"
 
     conda:
         ENV
@@ -217,6 +248,8 @@ checkpoint initialize_analysis:
 # The bootstrapped SWD distribution of every set of analysis parameters is obtained the same way,
 # whether its samples were written by the initialisation or by the reweighting split: a single
 # pair of rules covers them all, with the set named by the {param_set} wildcard.
+# One of these takes seconds, far too short to be worth a submission of its own, so they are
+# grouped and run many-to-a-submission.
 rule run_bootstrap:
     input:
         target_test=BASE_SAMPLES_DIR + "target_test.parquet"
@@ -226,6 +259,14 @@ rule run_bootstrap:
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set=lambda wc: PARAM_SET_DICT[wc.param_set],
         n_bootstrap=config["swd_bootstrapping"]["n_samples"]
+    group: "swd"
+    threads: 1
+    resources:
+        mem_mb=scaled(2000),
+        runtime=scaled(1),
+        disk_mb=10000
+    benchmark:
+        INIT_BENCH_DIR + "{param_set}/run_bootstrap_{run_id}.tsv"
     conda:
         ENV
     shell:
@@ -241,6 +282,7 @@ rule run_bootstrap:
             --random_seed {wildcards.run_id}
         """ 
 
+# localrule
 rule aggregate_bootstrap:
     input:
         lambda wc: expand(
@@ -258,7 +300,7 @@ rule aggregate_bootstrap:
             --output {output.final_file}
         """
 
-
+# localrule
 rule prepare_hps:
     input:
         grid_file=GRID_FILE
@@ -295,6 +337,16 @@ rule single_fine_tuning:
     output:
         output_file=TENSORBOARD_DIR + "{model}/run_{run_id}_metrics.csv"
 
+    group: "tune"
+    threads: 1
+    resources:
+        mem_mb=scaled(3000),
+        runtime=scaled(20),
+        disk_mb=10000
+
+    benchmark:
+        BENCH_DIR + "single_fine_tuning_{model}_{run_id}.tsv"
+
     conda:
         ENV
 
@@ -313,6 +365,7 @@ rule single_fine_tuning:
             --output_file {output.output_file}
         """
 
+#localrule
 rule fine_tuning:
     input:
         lambda wc: [
@@ -341,7 +394,9 @@ rule fine_tuning:
             {params.selections}
         """
 
-
+# Trains every model in 'model_list' on the full training sample of one topology, so this is
+# the most memory-hungry rule after the initialisation. XGBoost parallelises over the cores
+# HTCondor grants it, which the jobscript pins via OMP_NUM_THREADS.
 rule train_models:
     input:
         hparam_file=f"set_hyperparameters/{TAG}/{{sample}}/{{topology}}/hyperparameters.json",
@@ -354,6 +409,13 @@ rule train_models:
         param_set=PARAM_SET_DICT[REWEIGHTING_SET]
     output:
         save_path_dict=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
+    threads: 2
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(20),
+        disk_mb=10000
+    benchmark:
+        BENCH_DIR + "train_models.tsv"
     conda:
         ENV
     shell:
@@ -369,7 +431,9 @@ rule train_models:
             --save_path_dict {output.save_path_dict}
         """
 
-
+# Computes chi2 and SWD over every configured parameter set, holding the test sample and the
+# weights of each model, so its memory grows with the number of parameter sets as well as
+# with the sample size. Its runtime also scales with swd_bootstrapping/n_directions.
 rule compute_metrics:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
@@ -386,6 +450,15 @@ rule compute_metrics:
         swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS)),
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set_dict=json.dumps(PARAM_SET_DICT)
+
+    threads: 1
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(45),
+        disk_mb=10000
+
+    benchmark:
+        BENCH_DIR + "compute_metrics.tsv"
 
     conda:
         ENV
@@ -405,6 +478,8 @@ rule compute_metrics:
             --binning_file {params.binning_file}
         """
 
+# One 1D histogram per analysis parameter, so matplotlib rather than the sample dominates
+# the runtime here.
 rule make_plots:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
@@ -417,6 +492,15 @@ rule make_plots:
         sample_dir=BASE_SAMPLES_DIR,
         binning_file=config["parameters"]["binning_file"],
         output_dir=FIG_DIR
+
+    threads: 1
+    resources:
+        mem_mb=scaled(3000),
+        runtime=scaled(15),
+        disk_mb=10000
+
+    benchmark:
+        BENCH_DIR + "make_plots.tsv"
 
     conda:
         ENV

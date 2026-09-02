@@ -63,8 +63,8 @@ parameters:
     - CosLep
     - Eav
     - W
-    - PTlep
-  
+    - q0
+
   # parameters to compute the metrics on (along with the reweighting parameters).
   all: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav",
         "W", "y", "Mode", "cc", "N_n", "K_n", "N_p", "K_p", "N_pi0", "K_pi0", 
@@ -106,12 +106,19 @@ models:
       direction: min
 
 swd_bootstrapping:
-  runs: 8
-  n_samples: 100
-  n_directions: 50
+  #   runs x n_samples   the total number of bootstrap samples drawn, i.e. the statistics.
+  #   runs               how many separate jobs that total is split into, and so how much
+  #                      of it can run in parallel on the batch system.
+  #   n_directions       the number of random projections each bootstrap sample is
+  #                      evaluated on. Multiplies the cost of every job, without changing
+  #                      how many jobs there are.
+
   # runs: 50
-  # n_samples = 5
+  # n_samples: 5
   # n_directions: 500
+  runs: 1
+  n_samples: 64
+  n_directions: 500
 
 output:
-  tag: "test_newrepo3"
+  tag: "test_condor"

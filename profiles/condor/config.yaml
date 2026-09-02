@@ -1,0 +1,61 @@
+# Snakemake profile for the Imperial HEP HTCondor pool.
+#
+#     snakemake <target> --profile profiles/condor        # SUBMITS jobs
+#     snakemake <target> -n --profile profiles/condor     # dry run, submits nothing
+#
+
+# --- how Snakemake reaches the batch system --------------------------------
+cluster: "cluster/condor_submit.py"
+cluster-status: "cluster/condor_status.py"
+cluster-cancel: "condor_rm"
+# Snakemake calls the cancel command with a hard two-second timeout, so cancel
+# in modest chunks rather than handing it thousands of job ids at once.
+cluster-cancel-nargs: 200
+jobscript: "cluster/jobscript.sh"
+
+# --- concurrency -----------------------------------------------------------
+# 'jobs' is the number of submissions in flight.
+# 'cores' is the number of cores INSIDE each submission, and must always be set
+# in cluster mode.
+jobs: 100
+cores: 8
+local-cores: 8
+max-jobs-per-second: 5
+# Snakemake calls cluster-status once per in-flight job every ten seconds. The
+# status script answers from a cached queue dump, but keep the rate modest too.
+max-status-checks-per-second: 2
+
+# --- robustness on a shared (CephFS) filesystem ---------------------------
+latency-wait: 120
+# One sparse topology should not stop the other eleven samples.
+keep-going: true
+# Pairs with the attempt-scaled mem_mb in the Snakefile: an underestimated memory
+# request then costs one resubmission instead of the workflow.
+retries: 3
+rerun-incomplete: true
+printshellcmds: true
+
+# --- floors for any rule that declares no resources of its own ------------
+default-resources:
+  - "mem_mb=4000"
+  - "runtime=180"     # minutes; the submit wrapper converts to +MaxRuntime seconds
+  - "disk_mb=10000"
+
+# --- job granularity -------------------------------------------------------
+# Connected components of each group per submission. Group resources are derived
+# by Snakemake, not by these numbers directly: within a topological layer memory
+# is summed and runtime maxed, across layers memory is maxed and runtime summed.
+# So for N independent jobs at 'cores' wide:
+#
+#     submission runtime  ~=  ceil(N / cores) * per-job runtime
+#     submission memory   ~=  cores * per-job memory
+#
+# and to land a submission in the 30-60 minute range the pool asks for:
+#
+#     N  ~=  45 * cores / per-job runtime
+#
+# Both groups hold only mutually independent jobs, because the two rules that would
+# link them - 'fine_tuning' and 'aggregate_bootstrap' - are kept local.
+group-components:
+  - "swd=32"     # production: 56 at cores=8
+  - "tune=12"    # production: 40 at cores=8
