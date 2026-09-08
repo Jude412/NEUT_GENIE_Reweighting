@@ -185,6 +185,11 @@ def check_model(model_name):
     if model_name not in MODEL_NAMES:
         raise ValueError(f"Invalid model choice '{model_name}'. Please choose from {list(MODEL_NAMES)}.")
 
+def model_extension(model_name):
+    """Return the file extension a model is saved with by 'save_model'."""
+    check_model(model_name)
+    return ".pkl" if model_name == "binning" else ".json"
+
 def hyperparameters_of(model_name, hyperparameters_file=None):
     """Return the hyperparameters a model is to be trained with.
 

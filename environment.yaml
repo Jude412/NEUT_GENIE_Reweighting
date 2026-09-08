@@ -5,6 +5,7 @@ dependencies:
     - python=3.9
     - pip
     - pip:
+      - numpy 
       - matplotlib
       - hep_ml
       - torch
@@ -13,3 +14,7 @@ dependencies:
       - uproot
       - awkward
       - snakemake
+      - xgboost
+      - pot
+      - tensorboard
+      - pyarrow

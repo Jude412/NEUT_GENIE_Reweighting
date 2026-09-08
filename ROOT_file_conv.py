@@ -9,7 +9,8 @@ from typing import cast
 from Constants import WEIGHT_COLUMN, TOPOLOGY_COLUMN, TOPOLOGY_CODES, topology_code
 
 # Branches to read in
-BRANCHES = ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep", "fScaleFactor", "RWWeight"]
+# BRANCHES = ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "PDGnu", "Mode", "cc", "nfsp", "px", "py", "pz", "E", "pdg", "px", "py", "pz", "PDGLep", "fScaleFactor", "RWWeight"]
+BRANCHES = ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "Mode", "cc", "E", "pdg", "fScaleFactor", "RWWeight"]
 # Branches whose product gives the total weight of an event.
 WEIGHT_BRANCHES = ("RWWeight", "fScaleFactor")
 
@@ -48,9 +49,9 @@ def convert_input_file(input_file, input_tree, analysis_params, modes = None) ->
     # multiplicity and sum of kinetic energies of final state protons, neutrons and pions
     pdg = tree["pdg"]
     energy = tree["E"]
-    px = tree["px"]
-    py = tree["py"]
-    pz = tree["pz"]
+    # px = tree["px"]
+    # py = tree["py"]
+    # pz = tree["pz"]
 
     #Multiplicity
     tree["N_n"]   = ak.sum(pdg == 2112, axis=1)
@@ -62,23 +63,23 @@ def convert_input_file(input_file, input_tree, analysis_params, modes = None) ->
     tree["N_other"] = ak.sum((pdg != 2112) & (pdg != 2212) & (pdg != 111) & (pdg != 211) & (pdg != -211) & (pdg != 22) & (pdg < 1000000000), axis=1) - 1 # -1 to remove prim lepton
 
     #Sum of kinetic energy
-    tree["E_N"]   = energy * (pdg == 2112)
-    tree["E_P"]   = energy * (pdg == 2212)
-    tree["E_pi0"] = energy * (pdg == 111)
-    tree["E_pim"] = energy * (pdg == -211)
-    tree["E_pip"] = energy * (pdg == 211)
+    # tree["E_N"]   = energy * (pdg == 2112)
+    # tree["E_P"]   = energy * (pdg == 2212)
+    # tree["E_pi0"] = energy * (pdg == 111)
+    # tree["E_pim"] = energy * (pdg == -211)
+    # tree["E_pip"] = energy * (pdg == 211)
 
-    tree["P2_N"] = px**2 * (pdg == 2112) + py**2 * (pdg == 2112) + pz**2 * (pdg == 2112)
-    tree["P2_P"] = px**2 * (pdg == 2212) + py**2 * (pdg == 2212) + pz**2 * (pdg == 2212)
-    tree["P2_pi0"] = px**2 * (pdg == 111) + py**2 * (pdg == 111) + pz**2 * (pdg == 111)
-    tree["P2_pim"] = px**2 * (pdg == -211) + py**2 * (pdg == -211) + pz**2 * (pdg == -211)
-    tree["P2_pip"] = px**2 * (pdg == 211) + py**2 * (pdg == 211) + pz**2 * (pdg == 211)
+    # tree["P2_N"] = px**2 * (pdg == 2112) + py**2 * (pdg == 2112) + pz**2 * (pdg == 2112)
+    # tree["P2_P"] = px**2 * (pdg == 2212) + py**2 * (pdg == 2212) + pz**2 * (pdg == 2212)
+    # tree["P2_pi0"] = px**2 * (pdg == 111) + py**2 * (pdg == 111) + pz**2 * (pdg == 111)
+    # tree["P2_pim"] = px**2 * (pdg == -211) + py**2 * (pdg == -211) + pz**2 * (pdg == -211)
+    # tree["P2_pip"] = px**2 * (pdg == 211) + py**2 * (pdg == 211) + pz**2 * (pdg == 211)
 
-    tree["K_n"]   = ak.sum(tree["E_N"] - np.sqrt(tree["E_N"]**2 - tree["P2_N"]), axis=1)
-    tree["K_p"]   = ak.sum(tree["E_P"] - np.sqrt(tree["E_P"]**2 - tree["P2_P"]), axis=1)
-    tree["K_pi0"] = ak.sum(tree["E_pi0"] - np.sqrt(tree["E_pi0"]**2 - tree["P2_pi0"]), axis=1) 
-    tree["K_pim"] = ak.sum(tree["E_pim"] - np.sqrt(tree["E_pim"]**2 - tree["P2_pim"]), axis=1)
-    tree["K_pip"] = ak.sum(tree["E_pip"] - np.sqrt(tree["E_pip"]**2 - tree["P2_pip"]), axis=1)
+    # tree["K_n"]   = ak.sum(tree["E_N"] - np.sqrt(tree["E_N"]**2 - tree["P2_N"]), axis=1)
+    # tree["K_p"]   = ak.sum(tree["E_P"] - np.sqrt(tree["E_P"]**2 - tree["P2_P"]), axis=1)
+    # tree["K_pi0"] = ak.sum(tree["E_pi0"] - np.sqrt(tree["E_pi0"]**2 - tree["P2_pi0"]), axis=1) 
+    # tree["K_pim"] = ak.sum(tree["E_pim"] - np.sqrt(tree["E_pim"]**2 - tree["P2_pim"]), axis=1)
+    # tree["K_pip"] = ak.sum(tree["E_pip"] - np.sqrt(tree["E_pip"]**2 - tree["P2_pip"]), axis=1)
     tree["E_gamma"] = ak.sum(energy * (pdg == 22), axis=1)
 
     tree["W"] = tree["W_nuc_rest"]
