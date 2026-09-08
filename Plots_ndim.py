@@ -62,7 +62,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
       with the method name as key and the weights as value."""
     mh.style.use("DUNE")
     with PdfPages(f"{output_file}") as pdf:
-        for var in variables:    
+        for var in variables:
             #For the sake of the plots in this function, we use a given binning for each variable, specified in the dict_binning.
             #If the variable is not present, we use a default binning : uniform between the 1st and 99th percentiles of the target distribution for this 
             #variable.

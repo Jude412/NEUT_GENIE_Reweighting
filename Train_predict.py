@@ -185,13 +185,17 @@ def check_model(model_name):
     if model_name not in MODEL_NAMES:
         raise ValueError(f"Invalid model choice '{model_name}'. Please choose from {list(MODEL_NAMES)}.")
 
+def model_extension(model_name):
+    """Return the file extension a model is saved with by 'save_model'."""
+    check_model(model_name)
+    return ".pkl" if model_name == "binning" else ".json"
+
 def hyperparameters_of(model_name, hyperparameters_file=None):
     """Return the hyperparameters a model is to be trained with.
 
     They are read from the given json file, which holds either the hyperparameters of the model
     itself (as written by 'List_hyperparameters.py') or the {model: hyperparameters} dictionary of
-    several models (as written by 'Gather_fine_tuning.py'). The default hyperparameters of the
-    model are used when no file is given."""
+    several models. The default hyperparameters of the model are used when no file is given."""
     check_model(model_name)
     if hyperparameters_file is None:
         return dict(DEFAULT_HYPERPARAMETERS[model_name])

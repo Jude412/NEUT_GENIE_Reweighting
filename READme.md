@@ -1,17 +1,35 @@
 This repository allows one to perform a reweighting analysis between two sets of Nuisance input files. 
 
 ## Environment setup
-If you DO have conda installed, simply add --use-conda at the end of any command including snakemake.
-If you DO NOT have conda installed, you should first create a virtual environment with the following command:
+
+The code is tested against Python 3.14. Grid submission through the HTCondor snakemake profile 
+(described below) requires Snakemake v8 or later (which brought the executor-plugin interface 
+that profile relies on), so make sure whichever environment you build satisfies that.
+
+If you DO have `conda` installed, you can add `--use-conda` at the end of every snakemake command, 
+and snakemake will build the per-rule environment described in `environment.yaml` the first time 
+it is needed. Note this only manages the environment each job runs in - the environment you invoke 
+`snakemake` from yourself still needs to contain Snakemake and, for condor grid submissions, must
+satisfy the Snakemake v8+ requirement above.
+
+If you DO NOT have `conda` installed, skip `--use-conda` entirely and instead build the environment
+yourself from `environment.yaml` and activate it before running snakemake, e.g.:
 ```shell
-python3 -m venv .venv
-source .venv/bin/activate
+micromamba create -f environment.yaml
+micromamba activate snakemake-env
 ```
-and then install the necessary librairies with :
+
+Or, you can create a virtual Python environment using against requirements.txt:
 ```shell
+python3.14 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
-Use the snakemake commands WITHOUT --use-conda at the end
+Use the snakemake commands WITHOUT --use-conda at the end.
+
+Each route installs the same set of packages: `numpy`, `matplotlib`, `hep_ml`, `torch`/`pytorch`,
+`mplhep`, `pandas`, `uproot`, `awkward`, `snakemake` (>=8), `snakemake-executor-plugin-cluster-generic`,
+`htcondor`/`python-htcondor`, `xgboost`, `pot`, `tensorboard`, `pyarrow` and `scipy`.
 
 ## Inputs
 
@@ -24,7 +42,8 @@ After cloning the repository, one should first obtain input samples. These shoul
 In `config.yaml`, you can change several parameters for your analysis : 
 
 In the `inputs` section, you can specify
-- `original(target)_dir`: the directory containing your original (target) input samples (the samples you are reweighting from (to))
+- `original(target)_dir`: the directory containing your original (target) input samples (the samples you are 
+  reweighting from (to))
 - `original(target)_tree`: the name of the FlatTree inside your original (target) input ROOT files
 
 In the `analysis` section, you can specify 
@@ -39,16 +58,17 @@ In the `analysis` section, you can specify
 
 In the `parameters` section, you can specify
 - `reweighting`: the parameters used to train the reweighting models
-- `all`: the full set of parameters to be stored from each sample
-    - Reweighting metrics are calculated in this full parameter space, and plots are produced showing the reweighting performance as a function of each of these variables
-- `metric_sets`: subsets of the `all` parameter space for which reweighting metrics are also calculated
+- `metric_sets`: parameter sets to be used for the reweighting metrics
     - eg. `8D: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav"]`
-- `binning_file`: the path to a json file containing the binnings for each parameter in `all` to be used for performance plots
+- `extra`: additional parameters for which histograms will be plotted showing the reweighiting performance.
+    - Note that all the parameters in `metric_sets` and `reweighting` are automatically plotted.
+- `binning_file`: the path to a json file containing the binnings for each parameter in `all` to be used for 
+  performance plots
     - A default quantile-based binning is used for any variables without specified binnings
 
 In the `models` section, you can specify
 - `model_list`: list of models to train
-    - Choose from `[binning, XGB unnormXGB]` for now
+    - Choose from `[binning, XGB, unnormXGB]` for now
         - `binning` is a binned reweighting
         - `XGB` is a BDT-based reweighting using XGBoost
         - `unnormXGB` is the same, but trained on unnormalised classes
@@ -65,8 +85,8 @@ In the `output` section, you can specify
 
 ## Hyperparameters
 
-The hyperparameters of the models are fine-tuned by the workflow itself: one run of `Fine_tuning.py` is carried out
-per point of the grid given in the `models/grid_file` file, and `Gather_fine_tuning.py` then keeps, for each model,
+The hyperparameters of the models are fine-tuned by the workflow itself: one run of `Train_model.py` is carried out
+per point of the grid given in the `models/grid_file` file, and `Gather_metrics.py` then finds, for each model,
 the set of hyperparameters giving the best value of the metric given in the `models/selection_metric` section. The
 chosen sets are written in `set_hyperparameters/{tag}/{sample}/{topology}/hyperparameters.json` and are the ones the
 final training uses. Nothing has to be written by hand: to change the hyperparameters that are scanned, change the
@@ -90,7 +110,7 @@ where `{tag}` is the tag given in the `output/tag` section, `{sample}` is the re
 (eg. `/FHC/numu/H2O`), `{topology}` is one of the topologies listed in the `analysis/topologies` section (ex : CC0pi), 
 and `{Dim}` is the number of parameters listed in the `parameters/reweighting` section of `config.yaml`.
 
-The metrics are written by `Calc_Metrics.py` in `saved_metrics`, and the plots by `Make_plots.py` in `saved_figures`:
+The metrics are written by `Compute_metrics.py` in `saved_metrics`, and the plots by `Make_plots.py` in `saved_figures`:
 asking for one of them does not run the other. Once finished, you can explore the different 'saved' folders containing 
 the samples, models, metrics and plots.
 
@@ -124,3 +144,24 @@ reweighted original sample matches the sum of the pre-weights of the target samp
 The samples are created once per sample and topology by `Init.py`, which splits the events into a training, 
 a validation and a test sample. They are stored as partitioned parquet datasets in `saved_samples`,
 partitioned by topology (for quick loading of a single topology).
+
+## Grid submissions
+
+Snakemake v8+ can submit jobs to a HTCondor grid using the `cluster-generic` executor plugin and the `htcondor`
+python package. If you have created your own environment via `environment.yaml` or `requirements.txt`, these
+will be installed already. If you are instead using conda, they must be available in the environment you invoke
+snakemake from. You can install them with the following command:
+```shell
+pip install --user htcondor snakemake-executor-plugin-cluster-generic
+```
+
+You will need to create a `htcondor` snakemake profile for your HTCondor grid. An example profile for the 
+Imperial College batch system can be installed from https://github.com/Charlotte-Knight/htcondor-ic.
+
+Then, you can run Snakemake with the `--profile` option, e.g.:
+```shell
+snakemake all --profile htcondor
+```
+
+For more information on the `cluster-generic` executor plugin, see
+https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/cluster-generic.html

@@ -1,5 +1,6 @@
 configfile: "config.yaml"
 
+from itertools import chain
 import glob
 import json
 import os
@@ -8,6 +9,7 @@ import re
 from List_hyperparameters import number_of_sets
 from Split_sizes import minimum_events
 from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET
+from Train_predict import model_extension
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
@@ -32,8 +34,7 @@ RUNS = range(config["swd_bootstrapping"]["runs"])
 METRIC_SETS = dict(config["parameters"].get("metric_sets") or {})
 # Sets written by the initialisation, i.e. every set but the reweighting one, whose samples are
 # obtained by keeping the reweighting parameters of the 'all' samples.
-INIT_SETS = [ALL_PARAMS_SET] + list(METRIC_SETS)
-PARAM_SETS = INIT_SETS + [REWEIGHTING_SET]
+PARAM_SETS = list(METRIC_SETS) + [REWEIGHTING_SET]
 
 ORIG_DIR = config["inputs"]["original_dir"]
 TARGET_DIR = config["inputs"]["target_dir"]
@@ -73,9 +74,18 @@ def get_samples():
 
 SAMPLES = get_samples()
 
+# Get union of all parameters
+def get_all_params():
+    all_sets = chain(
+        config["parameters"]["reweighting"],
+        config["parameters"]["extra"],
+        *METRIC_SETS.values(),
+    )
+    return list(dict.fromkeys(all_sets))
+
 def get_param_set_dict():
     dict = METRIC_SETS.copy()
-    dict[ALL_PARAMS_SET] = config["parameters"]["all"]
+    dict[ALL_PARAMS_SET] = get_all_params()
     dict[REWEIGHTING_SET] = config["parameters"]["reweighting"]
     return dict
 
@@ -98,20 +108,30 @@ def target_file_for(wildcards):
 # ---------------------------------------------------------------------------
 
 BASE_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/"
-INIT_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/{{topology}}/"
 INIT_SWD_DIR     = f"saved_swd_distribution/{TAG}/{{sample}}/{{topology}}/"
-SAMPLES_DIR      = INIT_SAMPLES_DIR + f"{REWEIGHTING_SET}/"
-SWD_DIR          = INIT_SWD_DIR + f"{REWEIGHTING_SET}/"
-MODEL_DIR        = f"saved_models/{TAG}/{{sample}}/{{topology}}/{REWEIGHTING_SET}/"
-WEIGHTS_DIR      = f"saved_weights/{TAG}/{{sample}}/{{topology}}/{REWEIGHTING_SET}/"
-FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/{{topology}}/{REWEIGHTING_SET}/"
-METRICS_DIR      = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/{REWEIGHTING_SET}/"
+ALL_MODELS_DIR   = f"saved_models/{TAG}/{{sample}}/{{topology}}/"
+BASE_MODEL_DIR   = ALL_MODELS_DIR + f"{{model}}/"
+MODEL_DIR        = BASE_MODEL_DIR + f"{{run_id}}/"
+ALL_METRICS_DIR  = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/"
+BASE_METRICS_DIR = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/{{model}}/"
+METRICS_DIR      = BASE_METRICS_DIR + f"{{run_id}}/"
+FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/{{topology}}/"
 HPS_DIR          = f"hps/{TAG}/"
-TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{{topology}}/{REWEIGHTING_SET}/"
+TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{{topology}}/"
+
+# Benchmarks hold the peak memory and wall time of every submitted job, and are what the
+# resource requests of the rules are calibrated from. They mirror the wildcards of the rule
+# that wrote them.
+BASE_BENCH_DIR   = f"benchmarks/{TAG}/{{sample}}/"
+BENCH_DIR   = BASE_BENCH_DIR + "{topology}/"
 
 # The bootstrapped SWD distribution of a set of parameters, whichever rule wrote its samples.
 def swd_distribution_file(param_set):
     return INIT_SWD_DIR + f"{param_set}/swd_distribution_{param_set}.npy"
+
+def model_file(model_name):
+    return BASE_MODEL_DIR.format(model=model_name, sample="{sample}", topology="{topology}") \
+        + f"{model_name}{model_extension(model_name)}"
 
 # Command line arguments naming a set of parameters and the path it is given as, as the scripts
 # computing the metrics take their bootstrapped SWD distributions ('--swd_distribution 3D path/to/3D.npy
@@ -138,21 +158,6 @@ wildcard_constraints:
     param_set="|".join(re.escape(str(s)) for s in PARAM_SETS),
     run_id=r"\d+"
 
-# ---------------------------------------------------------------------------
-# Topology filtering
-# A topology holding too few events cannot be split into training, validation
-# and test samples, so it is skipped for the sample it is too sparse in.
-# The minimum depends on the configured split percentages: with the default
-# 40%/40% split, 3 events are needed (2 events would give int(0.4*2) = 0
-# training and 0 validation events).
-# The same topology is still trained on in the samples where it is filled.
-# ---------------------------------------------------------------------------
-
-MIN_EVENTS_PER_TOPOLOGY = minimum_events(
-    config["analysis"]["train_percentage"], config["analysis"]["val_percentage"]
-)
-# The counts of all topologies are gathered in a single per-sample file (no {topology} wildcard),
-# as they are all obtained from one pass over the ROOT files of the sample.
 INCLUDED_TOPOLOGIES_FILE = f"saved_samples/{TAG}/{{sample}}/included_topologies.json"
 
 def topologies_for_sample(sample):
@@ -164,18 +169,28 @@ def topologies_for_sample(sample):
 
 def all_metrics_files(wildcards):
     return [
-        f"saved_metrics/{TAG}/{sample}/{topology}/{REWEIGHTING_SET}/metrics.json"
+        f"saved_metrics/{TAG}/{sample}/{topology}/metrics.json"
         for sample in SAMPLES
         for topology in topologies_for_sample(sample)
     ]
 
 def all_figure_dirs(wildcards):
     return [
-        f"saved_figures/{TAG}/{sample}/{topology}/{REWEIGHTING_SET}/1Dhist.pdf"
+        f"saved_figures/{TAG}/{sample}/{topology}/1Dhist.pdf"
         for sample in SAMPLES
         for topology in topologies_for_sample(sample)
     ]
 
+localrules: prepare_hps, aggregate_bootstrap, choose_models
+
+def scaled(base):
+    """A resource that grows with the retry attempt: base, then 2*base, then 3*base."""
+    return lambda wildcards, attempt: base * attempt
+
+
+# ROOT_file_conv.convert_input_file reads a whole file into memory and Init.py holds the
+# original while it converts the target, so this rule's memory scales with the input file
+# rather than with the topology.
 checkpoint initialize_analysis:
     input:
         original_file=original_file_for,
@@ -194,6 +209,15 @@ checkpoint initialize_analysis:
     output:
         last_sampled_files=directory(BASE_SAMPLES_DIR + "target_test.parquet"),
         included_topologies=INCLUDED_TOPOLOGIES_FILE
+
+    threads: 1
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(180),
+        disk_mb=10000
+
+    benchmark:
+        BASE_BENCH_DIR + "initialize_analysis.tsv"
 
     conda:
         ENV
@@ -217,15 +241,25 @@ checkpoint initialize_analysis:
 # The bootstrapped SWD distribution of every set of analysis parameters is obtained the same way,
 # whether its samples were written by the initialisation or by the reweighting split: a single
 # pair of rules covers them all, with the set named by the {param_set} wildcard.
+# One of these takes seconds, far too short to be worth a submission of its own, so they are
+# grouped and run many-to-a-submission.
 rule run_bootstrap:
     input:
         target_test=BASE_SAMPLES_DIR + "target_test.parquet"
     output:
-        output_file=INIT_SWD_DIR + "{param_set}/indiv_bootstrap/run_{run_id}.npy"
+        output_file=temp(INIT_SWD_DIR + "{param_set}/indiv_bootstrap/run_{run_id}.npy")
     params:
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set=lambda wc: PARAM_SET_DICT[wc.param_set],
         n_bootstrap=config["swd_bootstrapping"]["n_samples"]
+    # group: "swd"
+    threads: 1
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(180),
+        disk_mb=10000
+    benchmark:
+        BENCH_DIR + "bootstrap_swd_{param_set}/run_bootstrap_{run_id}.tsv"
     conda:
         ENV
     shell:
@@ -241,6 +275,7 @@ rule run_bootstrap:
             --random_seed {wildcards.run_id}
         """ 
 
+# localrule
 rule aggregate_bootstrap:
     input:
         lambda wc: expand(
@@ -248,7 +283,7 @@ rule aggregate_bootstrap:
             run_id=RUNS
         )
     output:
-        final_file=INIT_SWD_DIR + "{param_set}/swd_distribution_{param_set}.npy"
+        final_file=swd_distribution_file("{param_set}")
     conda:
         ENV
     shell:
@@ -258,14 +293,14 @@ rule aggregate_bootstrap:
             --output {output.final_file}
         """
 
-
+# localrule
 rule prepare_hps:
     input:
         grid_file=GRID_FILE
     params:
         models=MODELS
     output:
-        hps_files=HPS_FILES
+        hps_files=temp(HPS_FILES)
     conda:
         ENV
     shell:
@@ -276,11 +311,43 @@ rule prepare_hps:
             --output_dir {HPS_DIR}
         """
 
-rule single_fine_tuning:
+rule train_model:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
+        hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json"
+    params:
+        sample_dir=BASE_SAMPLES_DIR,
+        model=lambda wc: wc.model,
+        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET]
+    output:
+        model_dir=directory(MODEL_DIR)
+    threads: 1
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(180),
+        disk_mb=10000
+    benchmark:
+        BENCH_DIR + f"train_model_{{model}}/train_model_{{model}}_hp_{{run_id}}.tsv"
+    conda:
+        ENV
+    shell:
+        """
+        python Train_model.py \
+            --sample_dir {params.sample_dir} \
+            --topology {wildcards.topology} \
+            --model {params.model} \
+            --hyperparameters {input.hparam_file} \
+            --reweighting_params {params.reweight_params} \
+            --output_dir {output.model_dir}
+        """
+
+# Compute metrics for one hps for a given model
+rule compute_metrics:
+    input:
+        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
+        model_dir = MODEL_DIR,
         hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json",
-        swd_distributions=expand(INIT_SWD_DIR + "{param_set}/swd_distribution_{param_set}.npy",
+        swd_distributions=expand(swd_distribution_file("{param_set}"),
                                  param_set=PARAM_SETS, allow_missing=True)
 
     params:
@@ -293,122 +360,79 @@ rule single_fine_tuning:
         swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS))
 
     output:
-        output_file=TENSORBOARD_DIR + "{model}/run_{run_id}_metrics.csv"
+        metrics_file=METRICS_DIR + "metrics.csv"
+
+    # group: "tune"
+    threads: 1
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(180),
+        disk_mb=10000
+
+    benchmark:
+        BENCH_DIR + "compute_metrics_{model}/compute_metrics_{model}_{run_id}.tsv"
 
     conda:
         ENV
 
     shell:
         """
-        python Fine_tuning.py \
+        python Compute_metrics.py \
             --sample_dir {params.sample_dir} \
             --model {params.model} \
+            --model_dir {input.model_dir} \
             --topology {wildcards.topology} \
-            {params.swd_distribution_flags} \
             --hyperparameters {input.hparam_file} \
+            {params.swd_distribution_flags} \
             --logdir {params.logdir} \
             --n_directions {params.n_directions} \
             --param_set_dict '{params.param_set_dict}' \
             --binning_file {params.binning_file} \
-            --output_file {output.output_file}
+            --output_file {output.metrics_file}
         """
 
-rule fine_tuning:
+# Go through every model and every hyperparameter set, and gather the best metrics and models
+# localrule
+rule choose_models:
     input:
         lambda wc: [
-            f"TensorBoard/{TAG}/{wc.sample}/{wc.topology}/{REWEIGHTING_SET}/{model}/run_{run_id}_metrics.csv"
+            METRICS_DIR.format(sample=wc.sample, topology=wc.topology, model=model, run_id=run_id)
+            + f"metrics.csv"
             for model in MODELS
             for run_id in range(NUMBER_OF_SETS[model])
         ]
     output:
-        output_file=f"set_hyperparameters/{TAG}/{{sample}}/{{topology}}/hyperparameters.json"
+        metrics_file=f"saved_metrics/{TAG}/{{sample}}/{{topology}}/metrics.json",
+        model_files=[model_file(model) for model in MODELS]
+
     params:
-        logdir=TENSORBOARD_DIR,
-        grid_file=GRID_FILE,
-        # One '--selection MODEL METRIC DIRECTION' argument per model.
+        input_dir = ALL_METRICS_DIR,
         selections=" ".join(
             f"--selection {model} {SELECTION_METRIC[model]['metric']} {SELECTION_METRIC[model]['direction']}"
             for model in MODELS
-        )
+        ),
+        grid_file=GRID_FILE,
+        model_dir=ALL_MODELS_DIR
+
     conda:
         ENV
     shell:
         """
-        python Gather_fine_tuning.py \
-            --input_dir {params.logdir} \
-            --output_file {output.output_file} \
+        python Gather_metrics.py \
+            --input_dir {params.input_dir} \
+            --metrics_file {output.metrics_file} \
+            --model_dir {params.model_dir} \
             --grid_file {params.grid_file} \
             {params.selections}
         """
 
-
-rule train_models:
-    input:
-        hparam_file=f"set_hyperparameters/{TAG}/{{sample}}/{{topology}}/hyperparameters.json",
-        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet"
-    params:
-        samples_dir=BASE_SAMPLES_DIR,
-        model_list=MODELS,
-        model_dir=MODEL_DIR,
-        weights_dir=WEIGHTS_DIR,
-        param_set=PARAM_SET_DICT[REWEIGHTING_SET]
-    output:
-        save_path_dict=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
-    conda:
-        ENV
-    shell:
-        """
-        python Training.py \
-            --sample_dir {params.samples_dir} \
-            --topology {wildcards.topology} \
-            --param_set {params.param_set} \
-            --hparams_dict {input.hparam_file} \
-            --save_weights_path {params.weights_dir} \
-            --save_model_path {params.model_dir} \
-            --model_list {params.model_list} \
-            --save_path_dict {output.save_path_dict}
-        """
-
-
-rule compute_metrics:
-    input:
-        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
-        weights_path=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json",
-        swd_distributions=expand(INIT_SWD_DIR + "{param_set}/swd_distribution_{param_set}.npy",
-                                 param_set=PARAM_SETS, allow_missing=True)
-
-    output:
-        metrics_file=METRICS_DIR + "metrics.json"
-
-    params:
-        binning_file=config["parameters"]["binning_file"],
-        sample_dir=BASE_SAMPLES_DIR,
-        swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS)),
-        n_directions=config["swd_bootstrapping"]["n_directions"],
-        param_set_dict=json.dumps(PARAM_SET_DICT)
-
-    conda:
-        ENV
-
-    shell:
-        """
-        python Calc_Metrics.py \
-            --sample_dir {params.sample_dir} \
-            {params.swd_distribution_flags} \
-            --param_set_dict '{params.param_set_dict}' \
-            --topology {wildcards.topology} \
-            --weights_paths {input.weights_path} \
-            --output_file {output.metrics_file} \
-            --compute_chi2 \
-            --compute_swd \
-            --n_directions {params.n_directions} \
-            --binning_file {params.binning_file}
-        """
-
+# One 1D histogram per analysis parameter, so matplotlib rather than the sample dominates
+# the runtime here. The models plotted are the ones 'choose_models' symlinked, so this rule
+# depends on their paths rather than on any retrained copy of them.
 rule make_plots:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
-        weights_path=WEIGHTS_DIR + f"weights_path_dict_{REWEIGHTING_SET}.json"
+        model_files=[model_file(model) for model in MODELS]
 
     output:
         histograms_1D=FIG_DIR + "1Dhist.pdf"
@@ -416,7 +440,19 @@ rule make_plots:
     params:
         sample_dir=BASE_SAMPLES_DIR,
         binning_file=config["parameters"]["binning_file"],
-        output_dir=FIG_DIR
+        output_dir=FIG_DIR,
+        model_dir=ALL_MODELS_DIR,
+        model_list=MODELS,
+        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET]
+
+    threads: 1
+    resources:
+        mem_mb=scaled(4000),
+        runtime=scaled(180),
+        disk_mb=10000
+
+    benchmark:
+        BENCH_DIR + "make_plots.tsv"
 
     conda:
         ENV
@@ -426,7 +462,9 @@ rule make_plots:
         python Make_plots.py \
             --sample_dir {params.sample_dir} \
             --topology {wildcards.topology} \
-            --weights_paths {input.weights_path} \
+            --model_dir {params.model_dir} \
+            --model_list {params.model_list} \
+            --reweight_params {params.reweight_params} \
             --output_dir {params.output_dir} \
             --make_1D_plots \
             --no-make_2D_plots \
