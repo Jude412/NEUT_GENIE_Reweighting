@@ -1,10 +1,10 @@
 configfile: "config.yaml"
 
+from itertools import chain
 import glob
 import json
 import os
 import re
-import itertools.chain as chain
 
 from List_hyperparameters import number_of_sets
 from Split_sizes import minimum_events
@@ -176,12 +176,12 @@ def all_metrics_files(wildcards):
 
 def all_figure_dirs(wildcards):
     return [
-        f"saved_figures/{TAG}/{sample}/{topology}/{REWEIGHTING_SET}/1Dhist.pdf"
+        f"saved_figures/{TAG}/{sample}/{topology}/1Dhist.pdf"
         for sample in SAMPLES
         for topology in topologies_for_sample(sample)
     ]
 
-localrules: prepare_hps, aggregate_bootstrap
+localrules: prepare_hps, aggregate_bootstrap, choose_models
 
 def scaled(base):
     """A resource that grows with the retry attempt: base, then 2*base, then 3*base."""
@@ -283,7 +283,7 @@ rule aggregate_bootstrap:
             run_id=RUNS
         )
     output:
-        final_file=swd_distribution_file({param_set})
+        final_file=swd_distribution_file("{param_set}")
     conda:
         ENV
     shell:
@@ -314,7 +314,7 @@ rule prepare_hps:
 rule train_model:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
-        hparam_file=HPS_DIR + "{{model}}/{{model}}_hp_{{run_id}}.json"
+        hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json"
     params:
         sample_dir=BASE_SAMPLES_DIR,
         model=lambda wc: wc.model,
@@ -337,7 +337,7 @@ rule train_model:
             --topology {wildcards.topology} \
             --model {params.model} \
             --hyperparameters {input.hparam_file} \
-            --reweight_params {params.reweight_params} \
+            --reweighting_params {params.reweight_params} \
             --output_dir {output.model_dir}
         """
 
@@ -347,7 +347,7 @@ rule compute_metrics:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
         model_dir = MODEL_DIR,
         hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json",
-        swd_distributions=expand(swd_distribution_file({param_set}),
+        swd_distributions=expand(swd_distribution_file("{param_set}"),
                                  param_set=PARAM_SETS, allow_missing=True)
 
     params:
@@ -392,6 +392,7 @@ rule compute_metrics:
         """
 
 # Go through every model and every hyperparameter set, and gather the best metrics and models
+# localrule
 rule choose_models:
     input:
         lambda wc: [

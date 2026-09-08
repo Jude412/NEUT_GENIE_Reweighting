@@ -115,8 +115,8 @@ swd_bootstrapping:
   n_samples: 4
   n_directions: 500
   # runs: 1
-  # n_samples: 64
-  # n_directions: 500
+  # n_samples: 5
+  # n_directions: 50
 
 output:
   tag: "long_training"

@@ -195,8 +195,7 @@ def hyperparameters_of(model_name, hyperparameters_file=None):
 
     They are read from the given json file, which holds either the hyperparameters of the model
     itself (as written by 'List_hyperparameters.py') or the {model: hyperparameters} dictionary of
-    several models (as written by 'Gather_fine_tuning.py'). The default hyperparameters of the
-    model are used when no file is given."""
+    several models. The default hyperparameters of the model are used when no file is given."""
     check_model(model_name)
     if hyperparameters_file is None:
         return dict(DEFAULT_HYPERPARAMETERS[model_name])

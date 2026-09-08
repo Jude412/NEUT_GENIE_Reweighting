@@ -11,6 +11,10 @@ import os
 import json
 import numpy as np
 
+def int_or_none(value):
+    """Cast a command line argument to int, except for 'None' (any case), which is left as None."""
+    return None if value.lower() == "none" else int(value)
+
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Script to create the training, validation and test samples of every configured set of analysis parameters.")
     argparser.add_argument("--input_file_original", required=False, type=str, help="Path to the original input ROOT file.",
@@ -22,7 +26,8 @@ if __name__ == "__main__":
     argparser.add_argument("--input_tree_target", required=False, type=str, help="Name of the FlatTree in the target input file.",
                            default="T2KNOvATruthTree")
     argparser.add_argument("--analysis_params", nargs="+", help="List of parameters to extract from the branches for the analysis.")
-    argparser.add_argument("--modes", type=int, nargs="+", help="Interaction modes to select (e.g. 1 for CCQE).",
+    argparser.add_argument("--modes", type=int_or_none, nargs="+",
+                           help="Interaction modes to select (e.g. 1 for CCQE), or 'None' to select every mode.",
                            required=False, default=[1])
     argparser.add_argument("--topologies", type=str, nargs="+", help="Interaction topologies to check sizes of, given by name (e.g. CC0pi).",
                            required=False, default=["CC0pi"])
@@ -38,6 +43,10 @@ if __name__ == "__main__":
                            default="saved_samples/default/")
     argparser.add_argument("--topologies_file", required=False, type=str, help="Path to the output json file containing the topology codes to include", default="saved_samples/default/included_topologies.json")
     args = argparser.parse_args()
+    if args.modes == [None]:
+        # 'nargs="+"' always returns a list, so a single 'None' collapses to the bare None
+        # 'convert_input_file' expects to select every mode.
+        args.modes = None
 
     # Getting data from the files
     print("Getting data from the files...")

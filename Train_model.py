@@ -23,6 +23,7 @@ if __name__ == "__main__":
     # Train the model
     hyperparams = hyperparameters_of(args.model, args.hyperparameters)
     model = train_model(args.model, training_samples, hyperparams)
+    os.makedirs(args.output_dir, exist_ok=True)
     model_path = os.path.join(args.output_dir, f"{args.model}")
     save_model(args.model, model, model_path)
     print(f"{args.model} model saved at {model_path}")
