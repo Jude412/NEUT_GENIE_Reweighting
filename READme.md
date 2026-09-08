@@ -130,18 +130,26 @@ Congrats, you ran your first analysis!
 ## Outputs
 
 The outputs of the analysis are saved in the following directories:
+
+#### Samples
 - `saved_samples/{tag}/{sample}/`: the original and target samples split into `test`, `train`, `val`, saved as
   parquet files partitioned by topology
-- `saved_swd_distribution/{tag}/{sample}/{topology}/{param_set}/`: the null SWD distribution for the target test
-  sample in the parameter space defined by `param_set`, saved as `.npy` files
+
+#### Models
 - `saved_models/{tag}/{sample}/{topology}/`: the best trained models for each topology and model type, saved as
   `.json` files for XGB and unnormXGB, and `.pkl` files for binned reweighting
 - `saved_models/{tag}/{sample}/{topology}/{model}/{run_id}/`: all the trained models for each topology and model type,
   saved as `.json` files for XGB and unnormXGB, and `.pkl` files for binned reweighting
+
+#### Metrics
+- `saved_swd_distribution/{tag}/{sample}/{topology}/{param_set}/`: the null SWD distribution for the target test
+  sample in the parameter space defined by `param_set`, saved as `.npy` files
 - `saved_metrics/{tag}/{sample}/{topology}/`: the metrics and hyperparameters for the best trained models for each
   topology and model type, saved as a `.json` file.
-- `saved_metrics/{tag}/{sample}/{topology}/{model}/{run_id}`: the metrics and hyperparameters for all the trained
+- `saved_metrics/{tag}/{sample}/{topology}/{model}/{run_id}/`: the metrics and hyperparameters for all the trained
   models for each topology and model type, saved as a `.csv` file.
+
+#### Figures
 - `saved_figures/{tag}/{sample}/{topology}/`: the plots showing the reweighting performance of each model for every 
   parameter (`1Dhist.pdf`) and the training history for the BDT-based reweightings saved as `.pdf` files.
 
@@ -168,32 +176,32 @@ https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/cluster-ge
 
 ## Snakemake rule descriptions
 
-#### checkpoint initialize_analysis
+#### `checkpoint initialize_analysis`
 Reads input files, counts the number of events in each topology, and writes the counts to a json file if the topology
 has enough events to be split into training, validation and test samples. Samples passing this check are split accordingly,
 stripped to the parameters listed in the config, and saved as parquet files partitioned by topology. This is a checkpoint
 because the DAG depends on the number of topologies passing this check, which is only known after the checkpoint has run.
 This rule is run once for each sample.
 
-#### rule run_bootstrap (relies on outputs of initialize_analysis)
+#### `rule run_bootstrap` (relies on outputs of initialize_analysis)
 Bootstraps `swd_bootstrapping/n_samples` samples from the target test sample, calculates the SWD between each sample and the
 target test sample, and saves the SWD distribution as a `.npy` file. This rule is run `swd_bootstrapping/runs` times for each
 sample/topology/parameter set combination. These are marked as `temp`, since they are later aggregated into a single file.
 
-#### rule aggregate_bootstrap (relies on outputs of run_bootstrap)
+#### `rule aggregate_bootstrap` (relies on outputs of run_bootstrap)
 Local rule that aggregates the SWD distributions from `run_bootstrap` into a single `.npy` file. This rule is run once per 
 sample/topology/parameter set combination
 
-#### rule prepare_hps (relies on outputs of initialize_analysis)
+#### `rule prepare_hps` (relies on outputs of initialize_analysis)
 Local rule that writes a `.json` file for each hyperparameter set listed in the grid file. These are marked as `temp`, since
 they contain no information not contained in the grid file.
 
-#### rule train_model (relies on outputs of initialize_analysis and prepare_hps)
+#### `rule train_model` (relies on outputs of initialize_analysis and prepare_hps)
 Trains and saves a single model with a single hyperparameter set. This rule is run once for each hyperparameter set for each 
 model, for each sample/topology combination. The trained model is saved as a `.json` file for XGB and unnormXGB, and as a 
 `.pkl` file for binned reweighting.
 
-#### rule compute_metrics (relies on outputs of initialize_analysis, train_model and aggregate_bootstrap)
+#### `rule compute_metrics` (relies on outputs of initialize_analysis, train_model and aggregate_bootstrap)
 Computes the relevant metrics for a single trained model, and saves them to a `.csv` file. This is run once for each trained 
 model for each sample/topology combination. The metrics computed are:
 - SWD between the reweighted original and target test sample for the reweighting parameter set and each metric set
@@ -205,21 +213,21 @@ model for each sample/topology combination. The metrics computed are:
 
 These metrics are also computed between the original and target test samples themselves for comparison.
 
-#### rule choose_models (relies on outputs of compute_metrics)
+#### `rule choose_models` (relies on outputs of compute_metrics)
 Local rule that finds the best-performing model for every model in a given sample/topology, according to the metric specified 
 in the config. The hyperparameters and metrics for each model are saved in a single `.json` file. A symlink is created to each
 of the best-performing models in `saved_models/{tag}/{sample}/{topology}/{model}`. This rule is run once for each 
 sample/topology combination.
 
-#### rule make_plots (relies on the outputs of initialize_analysis and choose_models)
+#### `rule make_plots` (relies on the outputs of initialize_analysis and choose_models)
 Generates plots showing the reweighting performance of each model for every parameter included in the config. For BDT-based
 reweighting models, plots of the training history are also generated. This rule is run once for each sample/topology 
 combination, and the plots are saved as `.pdf` files.
 
-#### rule all
+#### `rule all`
 Carries out the entire workflow, by requesting the outputs of the initialize_analysis checkpoint for every sample, and the 
 outputs of choose_model and make_plots for every sample/topology combination. This rule is run once during the workflow.
 
-#### rule count_all_topologies
+#### `rule count_all_topologies`
 Carries out the intialize_analysis checkpoint for every sample by requesting its output. This rule can be run before a dry run
 to see the full DAG, since the number of topologies passing the event count check is only known after the checkpoint has run.
