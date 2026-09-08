@@ -8,61 +8,84 @@ metrics are carried out on the weighted events without ever using the weight its
 #imports
 import numpy as np
 import os
-
-# Name of the column holding the total weight of the events in the sample csv files.
-WEIGHT_COLUMN = "PreWeight"
+import pandas as pd
+import pyarrow.parquet as pq
+import pyarrow.dataset as ds
+import pyarrow as pa
+from Constants import WEIGHT_COLUMN, TOPOLOGY_COLUMN, topology_code
 
 # The samples every set of parameters is split into, as they are named on disk.
 SAMPLE_NAMES = ("original_train", "original_val", "original_test",
                 "target_train", "target_val", "target_test")
 
-def sample_columns(sample_file):
-    """Return the names of the parameters stored in a sample csv file, without the weight column."""
-    with open(sample_file) as f:
-        header = f.readline()
+def save_sample(sample, sample_file):
+    os.makedirs(os.path.dirname(sample_file), exist_ok=True)
+    table = pa.Table.from_pandas(sample)
+    pq.write_to_dataset(table,
+                        root_path=sample_file,
+                        partition_cols=[TOPOLOGY_COLUMN],
+                        compression="zstd")
 
-    columns = [name.strip() for name in header.lstrip("#").strip().split(",")]
-    if columns and columns[-1] == WEIGHT_COLUMN:
-        columns = columns[:-1]
-    return columns
+def df_to_np(sample):
+    """Convert a sample dataframe to a tuple of (events, weights) numpy arrays."""
+    events = sample.drop(columns=[WEIGHT_COLUMN]).to_numpy()
+    weights = sample[WEIGHT_COLUMN].to_numpy()
+    return events, weights
 
+def sample_params(sample_file):
+    """Return the parameter names held by a sample parquet dataset, in schema order, excluding
+    the weight column and the topology partition column (which only ever serves to select which
+    partition to read, never as a parameter itself)."""
+    columns = ds.dataset(sample_file, partitioning="hive").schema.names
+    assert WEIGHT_COLUMN in columns, f"'{WEIGHT_COLUMN}' column not found in {sample_file}"
+    return [column for column in columns if column not in (WEIGHT_COLUMN, TOPOLOGY_COLUMN)]
 
-def save_sample(sample_file, distribution, weights, columns):
-    """Save a sample as a csv file, with the weights of its events appended as a last column."""
-    distribution = np.atleast_2d(distribution)
-    weights = np.asarray(weights, dtype=float).reshape(-1, 1)
-    np.savetxt(sample_file, np.hstack((distribution, weights)), delimiter=",",
-               header=",".join(list(columns) + [WEIGHT_COLUMN]))
+def load_sample(sample_file, topology=None, params=None):
+    """Load a sample parquet file and return the listed parameters with weights"""
+    if params is None:
+        params = sample_params(sample_file)
+    columns_to_read = list(params) + [WEIGHT_COLUMN]
 
+    if topology is None:
+        return df_to_np(pd.read_parquet(sample_file, columns=columns_to_read))
+    else:
+        return df_to_np(pd.read_parquet(sample_file,
+                             columns=columns_to_read,
+                             filters=[(TOPOLOGY_COLUMN, "==", topology_code(topology))]))
 
-def load_sample(sample_file):
-    """Load a sample csv file and return its parameters and the weights of its events.
-
-    Samples written without a weight column (for example by an older version of the workflow) are
-    given a weight of 1 for every event."""
-    data = np.loadtxt(sample_file, delimiter=",", ndmin=2)
-    with open(sample_file) as f:
-        header = f.readline()
-
-    columns = [name.strip() for name in header.lstrip("#").strip().split(",")]
-    if columns and columns[-1] == WEIGHT_COLUMN:
-        return data[:, :-1], data[:, -1]
-
-    print(f"Warning: no '{WEIGHT_COLUMN}' column found in {sample_file}: every event is given a weight of 1.")
-    return data, np.ones(data.shape[0])
-
-def create_samples(distribution, split_indices, weights = None):
+def split_sample(sample, train_percentage, val_percentage, included_topologies, random_seed):
     """Split a distribution into its samples, given the indices of the events of each of them.
 
-    Returns the {sample name: events} dictionary of the samples, and the {sample name: weights}
-    dictionary of the weights of their events when weights are given."""
-    samples = {name: distribution[indices] for name, indices in split_indices.items()}
-    if weights is None:
-        return samples
+    Returns three dataframes: train_df, val_df, test_df"""
+    train_parts, val_parts, test_parts = [], [], []
+    rng = np.random.default_rng(random_seed)
+    
+    for topology, group in sample.groupby(TOPOLOGY_COLUMN):
+        if topology not in included_topologies:
+            continue
 
-    sample_weights = {name: weights[indices] for name, indices in split_indices.items()}
-    return samples, sample_weights
+        idx = rng.permutation(len(group))
+        group = group.iloc[idx]
 
-def load_samples(sample_dir):
+        n = len(group)
+        n_train = int(train_percentage * n)
+        n_val = int(val_percentage * n)
+        n_test = n - n_train - n_val
+
+        assert n_train >= 1 and n_val >= 1 and n_test >= 1, (
+            f"Topology {topology} has too few events ({n}) to be split into training, validation and test samples with the requested percentages "
+        )
+
+        train_parts.append(group.iloc[:n_train])
+        val_parts.append(group.iloc[n_train:n_train + n_val])
+        test_parts.append(group.iloc[n_train + n_val:])
+
+    train_df = pd.concat(train_parts, ignore_index=True)
+    val_df = pd.concat(val_parts, ignore_index=True)
+    test_df = pd.concat(test_parts, ignore_index=True)
+
+    return train_df, val_df, test_df
+
+def load_samples(sample_dir, topology=None, params=None, sample_names=SAMPLE_NAMES):
     """Load every sample of a directory and return the {sample name: (events, weights)} dictionary."""
-    return {name: load_sample(os.path.join(sample_dir, f"{name}.csv")) for name in SAMPLE_NAMES}
+    return {name: load_sample(os.path.join(sample_dir, f"{name}.parquet"), topology=topology, params=params) for name in sample_names}

@@ -1,39 +1,39 @@
 inputs:
-  # original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_file_tree"
+  # original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_test"
   original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_test_20M"
   original_tree: "T2KNOvATruthTree"
-  # target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_file_tree"
+  # target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test"
   target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test_20M"
   target_tree: "T2KNOvATruthTree"
 
 analysis:
-  modes: 
-    - 1
-    - 2
-    - 11
-    - 12
-    - 13
-    - 16
-    - 17
-    - 21
-    - 22
-    - 23
-    - 26
-    - 31
-    - 32
-    - 33
-    - 34
-    - 36
-    - 38
-    - 39
-    - 41
-    - 42
-    - 43
-    - 44
-    - 45
-    - 46
-    - 51
-    - 52
+  modes: ~
+    # - 1
+    # - 2
+    # - 11
+    # - 12
+    # - 13
+    # - 16
+    # - 17
+    # - 21
+    # - 22
+    # - 23
+    # - 26
+    # - 31
+    # - 32
+    # - 33
+    # - 34
+    # - 36
+    # - 38
+    # - 39
+    # - 41
+    # - 42
+    # - 43
+    # - 44
+    # - 45
+    # - 46
+    # - 51
+    # - 52
 
     #choose in 1, 2, 11, 12, 13, 16, 17, 21, 22, 23, 26, 31, 32, 33, 34, 36, 38, 39, 41, 42, 43, 44, 45, 46, 51 and 52
 
@@ -62,21 +62,19 @@ parameters:
     - PLep
     - CosLep
     - Eav
-    - W
     - PTlep
-  
-  # parameters to compute the metrics on (along with the reweighting parameters)
-  all: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav",
-        "W", "y", "Mode", "Topology", "cc", "N_n", "K_n", 
-        "N_p", "K_p", "N_pi0", "K_pi0", "N_pip", "K_pip", "N_pim", "K_pim"]
 
   # Sets of parameters the metrics are computed on, each named by its key. Samples, bootstrapped
   # SWD distributions and metrics are produced for every set listed here.
   # Every parameter of a set must also be listed in the "all" section above.
-  # The "all" set itself and the set of reweighting parameters are always added to them.
+  # The set of reweighting parameters is always added to them.
   metric_sets:
+    # Fitting variables, possible reweighting variables, possible selection variables (for nova and t2k).
     8D: ["Enu_true", "PLep", "CosLep", "Q2", "q0", "q3", "PTlep", "Eav"]
     3D: ["Enu_true", "PLep", "CosLep"]
+
+  # parameters to plot distributions of (in addition to all parameters listed in other sets)
+  extra: ["W", "y", "Mode"]
 
   binning_file: "/vols/dune/jmm224/t2knova/reweighting/binnings.json"
 
@@ -96,20 +94,29 @@ models:
   # above (ex: SWD_3D, p_value_8D, chi2_dof_all).
   selection_metric:
     binning:
-      metric: SWD_8D
+      metric: SWD_reweighting
       direction: min
     XGB:
-      metric: SWD_8D
+      metric: SWD_reweighting
       direction: min
     unnormXGB:
-      metric: SWD_8D
+      metric: SWD_reweighting
       direction: min
 
 swd_bootstrapping:
-  # runs: 50
-  # n_directions: 50
-  runs: 200
+  #   runs x n_samples   the total number of bootstrap samples drawn, i.e. the statistics.
+  #   runs               how many separate jobs that total is split into, and so how much
+  #                      of it can run in parallel on the batch system.
+  #   n_directions       the number of random projections each bootstrap sample is
+  #                      evaluated on. Multiplies the cost of every job, without changing
+  #                      how many jobs there are.
+
+  runs: 100
+  n_samples: 4
   n_directions: 500
+  # runs: 1
+  # n_samples: 5
+  # n_directions: 50
 
 output:
-  tag: "test_20M"
+  tag: "long_training"

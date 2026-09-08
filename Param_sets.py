@@ -15,13 +15,7 @@ import argparse
 # Name of the set holding every analysis parameter. It is always built, as the metrics of the
 # other sets are computed from the samples holding every parameter.
 ALL_PARAMS_SET = "all"
-
-def add_param_set_argument(argparser, help_suffix=""):
-    """Add the repeatable '--param_set' argument to a parser."""
-    argparser.add_argument("--param_set", action="append", nargs="+", required=False, default=[],
-                           metavar=("NAME", "PARAM"),
-                           help="Name of a set of analysis parameters followed by the parameters it holds "
-                                f"(ex: '--param_set 3D Enu_true PLep CosLep'). Can be given once per set.{help_suffix}")
+REWEIGHTING_SET = "reweighting"
 
 def param_sets_from_args(param_set_args):
     """Return the {set name: list of parameters} dictionary of the '--param_set' arguments."""

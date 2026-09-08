@@ -12,7 +12,9 @@ saved_weights/
 set_hyperparameters/
 TensorBoard/
 saved_figures/
-Saved_evaluation/
+scripts/
+misc_figs/
+saved_metrics/
 live_figures.pdf
 live_metrics.py
 testing.ipynb
@@ -20,3 +22,9 @@ testing.ipynb
 batch/
 __pycache__/
 hps/
+*.root
+*.log
+
+# Condor job logs and Snakemake benchmark TSVs
+benchmarks/
+.condor_jobs/

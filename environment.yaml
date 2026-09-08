@@ -1,15 +1,23 @@
 name: snakemake-env
 channels:
   - conda-forge
+  - bioconda
 dependencies:
-    - python=3.9
+    - python=3.14
     - pip
-    - pip:
-      - matplotlib
-      - hep_ml
-      - torch
-      - mplhep
-      - pandas
-      - uproot
-      - awkward
-      - snakemake
+    - numpy
+    - matplotlib
+    - hep_ml
+    - pytorch
+    - mplhep
+    - pandas
+    - uproot
+    - awkward
+    - snakemake>=8
+    - snakemake-executor-plugin-cluster-generic
+    - python-htcondor
+    - xgboost
+    - pot
+    - tensorboard
+    - pyarrow
+    - scipy
