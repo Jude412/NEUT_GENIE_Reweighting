@@ -127,24 +127,6 @@ The counting is not repeated afterwards, as its output files are then up to date
 
 Congrats, you ran your first analysis!
 
-## Weights
-
-Every event carries a pre-weight, the product of the `RWWeight` and `fScaleFactor` branches of the input files.
-It is stored as a trailing `PreWeight` column of every sample file, and the original and target distributions
-are pre-weighted by it before the models are trained. The models therefore learn the reweighting taking the
-pre-weighted original distribution to the pre-weighted target distribution.
-
-The weights saved in `saved_weights` are the multipliers of that reweighting: they do not include the pre-weight
-of the events. To get the absolute weight of an event, multiply the saved weight by the `PreWeight` column of the
-sample it belongs to. The multipliers carry the normalisation, so that the sum of the absolute weights of the
-reweighted original sample matches the sum of the pre-weights of the target sample.
-
-## Samples
-
-The samples are created once per sample and topology by `Init.py`, which splits the events into a training, 
-a validation and a test sample. They are stored as partitioned parquet datasets in `saved_samples`,
-partitioned by topology (for quick loading of a single topology).
-
 ## Grid submissions
 
 Snakemake v8+ can submit jobs to a HTCondor grid using the `cluster-generic` executor plugin and the `htcondor`
