@@ -56,6 +56,9 @@ analysis:
   train_percentage: 0.4
   val_percentage: 0.4
 
+  # Optional fraction of each input file's events to read in (between 0 and 1)
+  downsampling: ~
+
 parameters:
   reweighting: # parameters to train the reweighting models on
     - Enu_true
