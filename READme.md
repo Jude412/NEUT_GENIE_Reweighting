@@ -1,17 +1,35 @@
 This repository allows one to perform a reweighting analysis between two sets of Nuisance input files. 
 
 ## Environment setup
-If you DO have conda installed, simply add --use-conda at the end of any command including snakemake.
-If you DO NOT have conda installed, you should first create a virtual environment with the following command:
+
+The code is tested against Python 3.14. Grid submission through the HTCondor snakemake profile 
+(described below) requires Snakemake v8 or later (which brought the executor-plugin interface 
+that profile relies on), so make sure whichever environment you build satisfies that.
+
+If you DO have `conda` installed, you can add `--use-conda` at the end of every snakemake command, 
+and snakemake will build the per-rule environment described in `environment.yaml` the first time 
+it is needed. Note this only manages the environment each job runs in - the environment you invoke 
+`snakemake` from yourself still needs to contain Snakemake and, for condor grid submissions, must
+satisfy the Snakemake v8+ requirement above.
+
+If you DO NOT have `conda` installed, skip `--use-conda` entirely and instead build the environment
+yourself from `environment.yaml` and activate it before running snakemake, e.g.:
 ```shell
-python3 -m venv .venv
-source .venv/bin/activate
+micromamba create -f environment.yaml
+micromamba activate snakemake-env
 ```
-and then install the necessary librairies with :
+
+Or, you can create a virtual Python environment using against requirements.txt:
 ```shell
+python3.14 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
-Use the snakemake commands WITHOUT --use-conda at the end
+Use the snakemake commands WITHOUT --use-conda at the end.
+
+Each route installs the same set of packages: `numpy`, `matplotlib`, `hep_ml`, `torch`/`pytorch`,
+`mplhep`, `pandas`, `uproot`, `awkward`, `snakemake` (>=8), `snakemake-executor-plugin-cluster-generic`,
+`htcondor`/`python-htcondor`, `xgboost`, `pot`, `tensorboard`, `pyarrow` and `scipy`.
 
 ## Inputs
 
@@ -124,3 +142,25 @@ reweighted original sample matches the sum of the pre-weights of the target samp
 The samples are created once per sample and topology by `Init.py`, which splits the events into a training, 
 a validation and a test sample. They are stored as partitioned parquet datasets in `saved_samples`,
 partitioned by topology (for quick loading of a single topology).
+
+## Grid submissions
+
+Snakemake v8+ can submit jobs to a HTCondor grid using the `htcondor` executor plugin and the `htcondor`
+python package. If you have created your own environment via `environment.yaml` or `requirements.txt`, these
+will be installed already. If you are instead using conda, they must be available in the environment you invoke
+snakemake from. You can install them with the following command:
+```shell
+pip install --user htcondor snakemake-executor-plugin-cluster-generic
+pip install htcondor
+```
+
+You will need to create a `htcondor` snakemake profile for your HTCondor grid. An example profile for the 
+Imperial College batch system can be installed from https://github.com/Charlotte-Knight/htcondor-ic.
+
+Then, you can run Snakemake with the `--profile` option, e.g.:
+```shell
+snakemake all --profile htcondor
+```
+
+For more information on the `htcondor` executor plugin, see
+https://snakemake.github.io/snakemake-plugin-catalog/plugins/executor/htcondor.html

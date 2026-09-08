@@ -23,7 +23,7 @@ batch/
 __pycache__/
 hps/
 *.root
-*.txt
+*.log
 
 # Condor job logs and Snakemake benchmark TSVs
 benchmarks/

@@ -1,4 +1,4 @@
-numpy 
+numpy
 matplotlib
 hep_ml
 torch
@@ -6,8 +6,11 @@ mplhep
 pandas
 uproot
 awkward
-snakemake
+snakemake>=8
+snakemake-executor-plugin-cluster-generic
+htcondor
 xgboost
 pot
 tensorboard
 pyarrow
+scipy
