@@ -1,4 +1,0 @@
-{"binning": {"n_bins" : 10, "n_neighs" : 0},
-"NN" : {"n_layers" : 2, "n_neurons" : 15, "epochs" : 100, "batch_size" : 4096, "activation_function" : "tanh"},
-"GBR" : {"n_estimators": 110, "learning_rate": 0.03, "max_depth": 4, "min_samples_leaf": 90, "loss_regularization":3},
-"XGB" : {"n_estimators" : 80, "gamma" : 0, "max_depth" : 3, "learning_rate" : 0.075, "subsample" : 1, "early_stopping_rounds" : 10}}
