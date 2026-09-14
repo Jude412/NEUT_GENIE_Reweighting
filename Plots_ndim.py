@@ -119,36 +119,30 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                 original_rw_counts_uncert_list.append(original_rw_uncertainty)
 
 
-            # print(np.sum(target_counts))
-            # print(np.sum(original_counts))
-            
             fig, (ax_main, ax_ratio) = plt.subplots(
-                2, 1, figsize=(8, 8), gridspec_kw={'height_ratios':[2,1], 'hspace': 0.1}, sharex=True
+                2, 1, figsize=(8, 8), gridspec_kw={'height_ratios':[2,1], 'hspace': 0.1}, sharex=True,
+                constrained_layout=True
             )
 
             colors = {}
             markers_list = ['s', 'd', '^', 'p', '*', 'h']  # Add more markers if needed
             chi2_values = {}
+            norm_ratio_values = {}
 
             #  Metrics
             text_str = "WD- "
             if add_wass_distance :
                 for key in weights_dict.keys():
-                    wass_distance = ot.wasserstein_1d(original[:, i], target[:, i], 
-                                                u_weights = weights_dict[key]/target_norm if target_weights is not None else None,
-                                                v_weights = target_weights/target_norm if target_weights is not None else None)
+                    wass_distance = ot.wasserstein_1d(original[:, i], target[:, i],
+                                                u_weights = weights_dict[key]/np.sum(weights_dict[key]),
+                                                v_weights = target_weights/np.sum(target_weights) if target_weights is not None else None)
                     text_str += f"{key}: {wass_distance:.2g}, "
 
             if add_chi2:
                 for key in weights_dict.keys():
                     chi2, dof = chi2_hist_axis(original, target, weights_dict[key], i, target_weights, n_bins=n_bins, x_min=x_min, x_max=x_max)
                     chi2_values[key] = chi2/dof if dof > 0 else 0
-
-            # if text_str != "WD- \nChi2-":
-            #     mh.add_text(text_str, ax = ax_main, loc = "over right", fontsize = 6)
-                # ax_main.text(0.95, 0.95, text_str, transform=ax_main.transAxes, fontsize=5,
-                #         verticalalignment='top', horizontalalignment='right',
-                #         bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+                    norm_ratio_values[key] = np.sum(weights_dict[key]) / target_norm
 
             # Distribution plot
             ax_main.errorbar(bin_centers, target_counts, yerr=target_uncertainty, fmt='o', label='Target')
@@ -157,10 +151,11 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
             for k in range(len(weights_dict)):
                 key = list(weights_dict.keys())[k]
                 line_rw, = ax_main.step(bins, np.r_[original_rw_counts_list[k],
-                                        original_rw_counts_list[k][-1]], 
+                                        original_rw_counts_list[k][-1]],
                                         markersize=0,
                                         where='post',
-                                        label=f'{key[0].upper() + key[1:]}' + r" $\chi^2_{dof}$:" + f" {chi2_values[key]:.2f}" if add_chi2 else f'{key[0].upper() + key[1:]}')
+                                        label=(f'{key[0].upper() + key[1:]}' + r" $\chi^2_{dof}$:" + f" {chi2_values[key]:.2f}"
+                                               + f", N: {norm_ratio_values[key]:.2f}") if add_chi2 else f'{key[0].upper() + key[1:]}')
                 colors[f'{key}'] = line_rw.get_color()
                 
                 original_rw_unc_lower = np.r_[original_rw_counts_list[k] - original_rw_counts_uncert_list[k], (original_rw_counts_list[k] - original_rw_counts_uncert_list[k])[-1]]
@@ -173,8 +168,6 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
             bottom, top = ax_main.get_ylim()
             ax_main.set_ylim(int(0), 1.2*top)
             ax_main.set_ylabel("Frequency", fontsize=22)
-            # handles, labels = ax_main.get_legend_handles_labels()
-            # order = [0, 4, 2, 3, 1, 5]  
             ax_main.legend(fontsize = 15, ncols = 3, loc = 'upper center', handlelength=1.2)
         
 
@@ -217,9 +210,6 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
             ax_ratio.set_ylim(0.50, 1.50)
             ax_ratio.legend(fontsize = 15)
             mh.set_fitting_ylabel_fontsize(ax_ratio)
-            # plt.tight_layout()
-            #plt.suptitle(f"Original, Reweighted and Target distributions with Ratio Plot (rw_dim = {len(list_parameters)})", y=1.02, fontsize=12)
-            # mh.add_text(f"Original, Reweighted and Target distributions", ax = ax_main, loc = "over left", fontsize = 17)
             pdf.savefig(fig)
             plt.close(fig)
 
@@ -264,7 +254,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         normalized_pull = pull_masked / max_delta
                         delta = np.max(np.abs(normalized_pull))
                         vmin, vmax = -delta, delta
-                        fig, ax = plt.subplots(figsize=(8, 8))
+                        fig, ax = plt.subplots(figsize=(8, 8), constrained_layout=True)
 
                         im = ax.imshow(
                             normalized_pull.T,
@@ -301,7 +291,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         delta = np.max(np.abs(ratio_delta))
                         vmin, vmax = -delta, delta
 
-                        fig, ax = plt.subplots(figsize=(8, 8))
+                        fig, ax = plt.subplots(figsize=(8, 8), constrained_layout=True)
 
                         im = ax.imshow(
                             ratio_delta.T,
@@ -334,7 +324,7 @@ def plot_training_history(model, output_file, title="Training history"):
 
     training_history = model.evals_result()
     with PdfPages(output_file) as pdf:
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(constrained_layout=True)
         ax.plot(training_history["validation_0"]["logloss"], label='Train Log Loss')
         ax.plot(training_history["validation_1"]["logloss"], label='Validation Log Loss')
         ax.set_xlabel('Boosting Iteration')
