@@ -47,7 +47,7 @@ if __name__ == "__main__":
     model = load_model(args.model, model_path)
     weights_test = predict_model(args.model, model, testing_samples[REWEIGHTING_SET]["original_test"])
 
-    run_name = "_".join(str(value) for value in hyperparams.values())
+    run_name = "_".join(f"{key}={value}" for key, value in hyperparams.items())
     writer = SummaryWriter(os.path.join(args.logdir, f"run_{run_name}_{int(time.time())}"))
     # The trained weights take the pre-weighted original distribution to the pre-weighted target one,
     # so they are multiplied by the pre-weights of the events to give their absolute weights.
@@ -56,7 +56,16 @@ if __name__ == "__main__":
         "Original": testing_samples[REWEIGHTING_SET]["original_test"][1],
     }
 
-    metrics = {}
+    # Every run reports the same set of metric keys, whatever the model type or the sets a
+    # bootstrapped SWD distribution was given for, so that TensorBoard's HParams table (and the
+    # aggregated metrics.csv rows) can compare runs on a consistent schema instead of silently
+    # missing columns.
+    metrics = {
+        "val_logloss": float("nan"),
+        "val_auc": float("nan"),
+        "train_logloss": float("nan"),
+        "train_auc": float("nan"),
+    }
     if (args.model == 'XGB') | (args.model == 'unnormXGB'):
         best_iter = best_iteration_of(model)
         metrics.update({
@@ -73,6 +82,10 @@ if __name__ == "__main__":
         original, _ = samples["original_test"]
         target, target_weight = samples["target_test"]
 
+        metrics[f"SWD_{set_name}"] = float("nan")
+        metrics[f"p_value_{set_name}"] = float("nan")
+        metrics[f"Original_SWD_{set_name}"] = float("nan")
+        metrics[f"Original_p_value_{set_name}"] = float("nan")
         if set_name in swd_distributions:
             swd_of_set = compute_swd(original, target, weight_dict,
                                      target_weights=target_weight, n_directions=args.n_directions)
@@ -119,7 +132,10 @@ if __name__ == "__main__":
         if f"p_value_{set_name}" in metrics:
             print(f"p_value_{set_name} : {metrics[f'p_value_{set_name}']}")
 
-    writer.add_hparams(hyperparams, metrics)
+    # 'run_name' is set to '.' so that the hparams and metrics are written directly into the run
+    # directory built above, instead of a further, separately-timestamped subdirectory of it.
+    writer.add_hparams(hyperparams, metrics, run_name=".")
+    writer.close()
 
     hparams_metrics_merged = {**hyperparams, **metrics}
     df_row = pd.DataFrame([hparams_metrics_merged])

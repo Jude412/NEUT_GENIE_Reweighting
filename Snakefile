@@ -355,7 +355,7 @@ rule compute_metrics:
     params:
         sample_dir=BASE_SAMPLES_DIR,
         model=lambda wc: wc.model,
-        logdir=lambda wc: TENSORBOARD_DIR + wc.model + "/",
+        logdir=lambda wc: TENSORBOARD_DIR.format(sample=wc.sample, topology=wc.topology) + wc.model + "/",
         binning_file=config["parameters"]["binning_file"],
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set_dict=json.dumps(PARAM_SET_DICT),
