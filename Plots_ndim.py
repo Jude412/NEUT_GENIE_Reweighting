@@ -145,7 +145,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                     norm_ratio_values[key] = np.sum(weights_dict[key]) / target_norm
 
             # Distribution plot
-            ax_main.errorbar(bin_centers, target_counts, yerr=target_uncertainty, fmt='o', label='Target')
+            ax_main.errorbar(bin_centers, target_counts, yerr=target_uncertainty, fmt='o', markersize=4, label='Target')
             ax_main.set_xlim(bins[0], bins[-1])
         
             for k in range(len(weights_dict)):
@@ -168,7 +168,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
             bottom, top = ax_main.get_ylim()
             ax_main.set_ylim(int(0), 1.2*top)
             ax_main.set_ylabel("Frequency", fontsize=22)
-            ax_main.legend(fontsize = 15, ncols = 3, loc = 'upper center', handlelength=1.2)
+            ax_main.legend(fontsize = 12, ncols = 3, loc = 'upper center', handlelength=1.2)
         
 
             # Ratio plot (Data / Reweighted Original)
@@ -208,7 +208,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
             ax_ratio.set_xlabel(xlabels[i], fontsize=22)
             ax_ratio.set_ylabel("Target / Rw Original", fontsize=22)
             ax_ratio.set_ylim(0.50, 1.50)
-            ax_ratio.legend(fontsize = 15)
+            ax_ratio.legend(fontsize = 12)
             mh.set_fitting_ylabel_fontsize(ax_ratio)
             pdf.savefig(fig)
             plt.close(fig)

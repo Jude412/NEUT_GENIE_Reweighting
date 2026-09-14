@@ -4,25 +4,25 @@
     "n_neighs": [0, 1, 2]
   },
   "XGB": {
-    "n_estimators": [999999999],
+    "n_estimators": [500000],
     "learning_rate": [0.01, 0.05, 0.1, 0.2],
     "max_depth": [3, 5, 7],
-    "subsample": [1],
+    "subsample": [0.8],
     "gamma": [0, 0.5],
-    "min_child_weight": [1],
+    "min_child_weight": [1, 5],
     "lambda": [1],
-    "alpha": [0],
-    "early_stopping_rounds": [10]
+    "alpha": [0.2],
+    "early_stopping_rounds": [100]
   },
   "unnormXGB": {
-    "n_estimators": [999999999],
+    "n_estimators": [500000],
     "learning_rate": [0.01, 0.05, 0.1, 0.2],
     "max_depth": [3, 5, 7],
-    "subsample": [1],
+    "subsample": [0.8],
     "gamma": [0, 0.5],
-    "min_child_weight": [1],
+    "min_child_weight": [1, 5],
     "lambda": [1],
-    "alpha": [0],
-    "early_stopping_rounds": [10]
+    "alpha": [0.2],
+    "early_stopping_rounds": [100]
   }
 }
