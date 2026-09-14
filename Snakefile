@@ -187,12 +187,12 @@ def scaled(base):
     """A resource that grows with the retry attempt: base, then 2*base, then 3*base."""
     return lambda wildcards, attempt: base * attempt
 
-# Reads input files, counts the number of events in each topology, and writes the counts 
-# to a json file if the topology has enough events to be split into training, validation 
-# and test samples. Samples passing this check are split accordingly, stripped to the 
-# parameters listed in the config, and saved as parquet files partitioned by topology. This 
-# is a checkpoint because the DAG depends on the number of topologies passing this check, 
-# which is only known after the checkpoint has run. This rule is run once for each sample.
+# Reads input files and identifies topologies with enough events to be split into training,
+# validation, and test samples. The included topology names are written to a JSON file.
+# Events in those topologies are split accordingly, stripped to the parameters listed in the
+# config, and saved as Parquet files partitioned by topology. This is a checkpoint because the
+# DAG depends on the included topologies, which are only known after it runs. This rule is run
+# once for each sample.
 checkpoint initialize_analysis:
     input:
         original_file=original_file_for,
