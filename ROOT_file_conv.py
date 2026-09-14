@@ -29,7 +29,11 @@ def convert_input_file(input_file, input_tree, analysis_params, modes = None, do
     # Open the ROOT file
     file = uproot.open(input_file)
     tree_obj = cast(uproot.TTree, file[input_tree])
-    entry_stop = round(tree_obj.num_entries * downsampling) if downsampling is not None else None
+entry_stop = (
+        max(1, round(tree_obj.num_entries * downsampling))
+        if downsampling is not None and tree_obj.num_entries > 0
+        else None
+    )
 
     chunks = [
         process_chunk(chunk, input_file, analysis_params, modes)
