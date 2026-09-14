@@ -215,7 +215,7 @@ checkpoint initialize_analysis:
 
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
 
@@ -259,7 +259,7 @@ rule run_bootstrap:
     # group: "swd"
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
     benchmark:
@@ -333,8 +333,8 @@ rule train_model:
         model_dir=directory(MODEL_DIR)
     threads: 1
     resources:
-        mem_mb=scaled(4000),
-        runtime=scaled(180),
+        mem_mb=4000,
+        runtime=scaled(500),
         disk_mb=10000
     benchmark:
         BENCH_DIR + f"train_model_{{model}}/train_model_{{model}}_hp_{{run_id}}.tsv"
@@ -376,7 +376,7 @@ rule compute_metrics:
     # group: "tune"
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
 
@@ -462,7 +462,7 @@ rule make_plots:
 
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
 
