@@ -180,7 +180,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                 ratio = target_counts / original_rw_counts_list[k]
 
                 # Reweighting uncertainty for the points (propagated to ratio)
-                ratio_rw_err = original_rw_counts_uncert_list[k] / original_rw_counts_list[k]
+                ratio_rw_err = ratio * (original_rw_counts_uncert_list[k] / original_rw_counts_list[k])
 
                 # Plot ratio points with reweighting uncertainty
                 ax_ratio.step(bins, np.r_[ratio, ratio[-1]],

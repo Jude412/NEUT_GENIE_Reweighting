@@ -112,6 +112,7 @@ INIT_SWD_DIR     = f"saved_swd_distribution/{TAG}/{{sample}}/{{topology}}/"
 ALL_MODELS_DIR   = f"saved_models/{TAG}/{{sample}}/{{topology}}/"
 BASE_MODEL_DIR   = ALL_MODELS_DIR + f"{{model}}/"
 MODEL_DIR        = BASE_MODEL_DIR + f"{{run_id}}/"
+FINAL_MODEL_DIR  = f"saved_final_models/{TAG}/{{sample}}/{{topology}}/"
 ALL_METRICS_DIR  = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/"
 BASE_METRICS_DIR = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/{{model}}/"
 METRICS_DIR      = BASE_METRICS_DIR + f"{{run_id}}/"
@@ -130,7 +131,8 @@ def swd_distribution_file(param_set):
     return INIT_SWD_DIR + f"{param_set}/swd_distribution_{param_set}.npy"
 
 def model_file(model_name):
-    return BASE_MODEL_DIR.format(model=model_name, sample="{sample}", topology="{topology}") \
+    return FINAL_MODEL_DIR.format(sample="{sample}", topology="{topology}") \
+        + f"{model_name}/" \
         + f"{model_name}{model_extension(model_name)}"
 
 # Command line arguments naming a set of parameters and the path it is given as, as the scripts
@@ -300,7 +302,7 @@ rule prepare_hps:
     params:
         models=MODELS
     output:
-        hps_files=temp(HPS_FILES)
+        hps_files=HPS_FILES
     conda:
         ENV
     shell:
@@ -412,7 +414,8 @@ rule choose_models:
             for model in MODELS
         ),
         grid_file=GRID_FILE,
-        model_dir=ALL_MODELS_DIR
+        model_dir=ALL_MODELS_DIR,
+        final_model_dir = FINAL_MODEL_DIR
 
     conda:
         ENV
@@ -422,6 +425,7 @@ rule choose_models:
             --input_dir {params.input_dir} \
             --metrics_file {output.metrics_file} \
             --model_dir {params.model_dir} \
+            --final_model_dir {params.final_model_dir} \
             --grid_file {params.grid_file} \
             {params.selections}
         """

@@ -76,7 +76,8 @@ if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Gather the fine-tuning runs of every model and keep the best hyperparameter set of each.")
     argparser.add_argument("--input_dir", required=True, help="Directory holding the fine-tuning metrics of every model.")
     argparser.add_argument("--metrics_file", required=True, help="Output json file for the best hyperparameter set of every model.")
-    argparser.add_argument("--model_dir", required=True, help="Directory holding the best models")
+    argparser.add_argument("--model_dir", required=True, help="Directory holding all the models")
+    argparser.add_argument("--final_model_dir", required=True, help="Directory to output the best models")
     argparser.add_argument("--grid_file", required=True, help="Path to the json file holding the hyperparameter grid of every model.")
     argparser.add_argument("--selection", action="append", nargs=3, required=True, metavar=("MODEL", "METRIC", "DIRECTION"),
                            help="Model, metric its best hyperparameter set is picked with, and whether that metric is "
@@ -109,9 +110,12 @@ if __name__ == "__main__":
               f"{hyperparameters}")
 
         ext = model_extension(model)
-        model_subdir = os.path.join(args.model_dir, model)
-        link_path = os.path.join(model_subdir, f"{model}{ext}")
-        target = os.path.join(str(run_id), f"{model}{ext}")  # relative, so the tree stays movable
+        final_model_subdir = os.path.join(args.final_model_dir, model)
+        os.makedirs(final_model_subdir, exist_ok=True)
+        best_model = os.path.join(args.model_dir, model, str(run_id), f"{model}{ext}")
+        # relative to final_model_subdir (the symlink's own directory), so the tree stays movable
+        target = os.path.relpath(best_model, final_model_subdir)
+        link_path = os.path.join(final_model_subdir, f"{model}{ext}")
 
         if os.path.lexists(link_path):
             os.remove(link_path)  # idempotent on reruns

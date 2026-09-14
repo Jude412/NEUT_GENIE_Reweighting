@@ -8,6 +8,7 @@ TensorBoard/
 saved_swd_distribution/
 saved_samples/
 saved_models/
+saved_final_models/
 saved_weights/
 set_hyperparameters/
 TensorBoard/
