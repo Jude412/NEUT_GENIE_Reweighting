@@ -13,13 +13,36 @@ from Constants import WEIGHT_COLUMN, TOPOLOGY_COLUMN, TOPOLOGY_CODES, topology_c
 BRANCHES = ["Enu_true", "ELep", "PLep", "CosLep", "Eav", "Q2", "q0", "q3", "W_nuc_rest", "y", "Mode", "cc", "E", "pdg", "fScaleFactor", "RWWeight"]
 # Branches whose product gives the total weight of an event.
 WEIGHT_BRANCHES = ("RWWeight", "fScaleFactor")
+# Number of entries read and filtered at a time, bounding peak memory use to about one chunk's
+# worth of events per file rather than the whole file.
+CHUNK_SIZE = 500_000
 
-def convert_input_file(input_file, input_tree, analysis_params, modes = None) -> pd.DataFrame:
-    """This function takes as input a ROOT FlatTree from and returns a dataframe containing all the parameters of interest."""
+def convert_input_file(input_file, input_tree, analysis_params, modes = None, downsampling = None) -> pd.DataFrame:
+    """This function takes as input a ROOT FlatTree from and returns a dataframe containing all the parameters of interest.
+
+    The file is read and filtered one chunk at a time, so that only the (much smaller) filtered
+    result of each chunk is held in memory alongside the next chunk being read."""
+
+    if downsampling is not None and not (0 < downsampling <= 1):
+        raise ValueError(f"'downsampling' must be a fraction in (0, 1], got {downsampling}.")
+
     # Open the ROOT file
     file = uproot.open(input_file)
-    tree = cast(uproot.TTree, file[input_tree]).arrays(BRANCHES, library="ak")
+    tree_obj = cast(uproot.TTree, file[input_tree])
+entry_stop = (
+        max(1, round(tree_obj.num_entries * downsampling))
+        if downsampling is not None and tree_obj.num_entries > 0
+        else None
+    )
 
+    chunks = [
+        process_chunk(chunk, input_file, analysis_params, modes)
+        for chunk in tree_obj.iterate(BRANCHES, step_size=CHUNK_SIZE, entry_stop=entry_stop, library="ak")
+    ]
+    return pd.concat(chunks, ignore_index=True)
+
+def process_chunk(tree, input_file, analysis_params, modes) -> pd.DataFrame:
+    """Apply the per-event cuts and derived columns to one chunk of a ROOT tree, and return it as a dataframe."""
     # Per-event weight: the total weight of an event is the product of its reweighting weight and of its scale factor.
     if WEIGHT_BRANCHES[0] in tree.fields and WEIGHT_BRANCHES[1] in tree.fields:
         tree[WEIGHT_COLUMN] = tree[WEIGHT_BRANCHES[0]] * tree[WEIGHT_BRANCHES[1]]

@@ -15,6 +15,10 @@ def int_or_none(value):
     """Cast a command line argument to int, except for 'None' (any case), which is left as None."""
     return None if value.lower() == "none" else int(value)
 
+def float_or_none(value):
+    """Cast a command line argument to float, except for 'None' (any case), which is left as None."""
+    return None if value.lower() == "none" else float(value)
+
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Script to create the training, validation and test samples of every configured set of analysis parameters.")
     argparser.add_argument("--input_file_original", required=False, type=str, help="Path to the original input ROOT file.",
@@ -31,6 +35,9 @@ if __name__ == "__main__":
                            required=False, default=[1])
     argparser.add_argument("--topologies", type=str, nargs="+", help="Interaction topologies to check sizes of, given by name (e.g. CC0pi).",
                            required=False, default=["CC0pi"])
+    argparser.add_argument("--downsampling", type=float_or_none,
+                           help="Fraction of each input file's events to read in (between 0 and 1), or 'None' to read every event.",
+                           required=False, default=None)
     argparser.add_argument("--train_percentage", type=float, help="Percentage of the training sample (between 0 and 1).",
                            required=False, default=0.4)
     argparser.add_argument("--val_percentage", type=float, help="Percentage of the validation sample (between 0 and 1).",
@@ -51,8 +58,8 @@ if __name__ == "__main__":
     # Getting data from the files
     print("Getting data from the files...")
 
-    original = convert_input_file(args.input_file_original, args.input_tree_original, args.analysis_params, modes = args.modes)
-    target = convert_input_file(args.input_file_target, args.input_tree_target, args.analysis_params, modes = args.modes)
+    original = convert_input_file(args.input_file_original, args.input_tree_original, args.analysis_params, modes = args.modes, downsampling = args.downsampling)
+    target = convert_input_file(args.input_file_target, args.input_tree_target, args.analysis_params, modes = args.modes, downsampling = args.downsampling)
     
     # Counting the topologies
     print(f"Counting topologies for sample {args.output_dir}...")

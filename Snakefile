@@ -21,14 +21,14 @@ NUMBER_OF_SETS = {model: number_of_sets(GRID_FILE, model) for model in MODELS}
 SELECTION_METRIC = config["models"]["selection_metric"]
 MODES = config["analysis"]["modes"]
 TOPOLOGIES = config["analysis"]["topologies"]
+# Optional fraction of each input file's events to read in; unset (None) reads every event.
+DOWNSAMPLING = config["analysis"].get("downsampling")
 RUNS = range(config["swd_bootstrapping"]["runs"])
 
 # ---------------------------------------------------------------------------
 # Sets of analysis parameters
-# The metrics are computed for every set listed in the config file, plus the 'all' set holding
-# every analysis parameter and the set of parameters the models are reweighted on. Every set is
-# handled by the same rules, with a {param_set} wildcard naming it, so that adding a set to the
-# config file is enough to have its samples, bootstrapped SWD distribution and metrics produced.
+# The metrics are computed for every set listed in the config file, plus the set of parameters 
+# the models are reweighted on.
 # ---------------------------------------------------------------------------
 
 METRIC_SETS = dict(config["parameters"].get("metric_sets") or {})
@@ -189,10 +189,12 @@ def scaled(base):
     """A resource that grows with the retry attempt: base, then 2*base, then 3*base."""
     return lambda wildcards, attempt: base * attempt
 
-
-# ROOT_file_conv.convert_input_file reads a whole file into memory and Init.py holds the
-# original while it converts the target, so this rule's memory scales with the input file
-# rather than with the topology.
+# Reads input files and identifies topologies with enough events to be split into training,
+# validation, and test samples. The included topology names are written to a JSON file.
+# Events in those topologies are split accordingly, stripped to the parameters listed in the
+# config, and saved as Parquet files partitioned by topology. This is a checkpoint because the
+# DAG depends on the included topologies, which are only known after it runs. This rule is run
+# once for each sample.
 checkpoint initialize_analysis:
     input:
         original_file=original_file_for,
@@ -206,6 +208,7 @@ checkpoint initialize_analysis:
         val_percentage=config["analysis"]["val_percentage"],
         analysis_params=PARAM_SET_DICT[ALL_PARAMS_SET],
         topologies=TOPOLOGIES,
+        downsampling=DOWNSAMPLING,
         samples_dir=BASE_SAMPLES_DIR
 
     output:
@@ -214,7 +217,7 @@ checkpoint initialize_analysis:
 
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
 
@@ -236,15 +239,16 @@ checkpoint initialize_analysis:
             --topologies {params.topologies} \
             --train_percentage {params.train_percentage} \
             --val_percentage {params.val_percentage} \
+            --downsampling {params.downsampling} \
             --output_dir {params.samples_dir} \
             --topologies_file {output.included_topologies} \
         """
 
-# The bootstrapped SWD distribution of every set of analysis parameters is obtained the same way,
-# whether its samples were written by the initialisation or by the reweighting split: a single
-# pair of rules covers them all, with the set named by the {param_set} wildcard.
-# One of these takes seconds, far too short to be worth a submission of its own, so they are
-# grouped and run many-to-a-submission.
+# Bootstraps swd_bootstrapping/n_samples samples from the target test sample, calculates 
+# the SWD between each sample and the target test sample, and saves the SWD distribution 
+# as a .npy file. This rule is run swd_bootstrapping/runs times for each sample/topology/
+# parameter set combination. These are marked as temp, since they are later aggregated into 
+# a single file.
 rule run_bootstrap:
     input:
         target_test=BASE_SAMPLES_DIR + "target_test.parquet"
@@ -257,7 +261,7 @@ rule run_bootstrap:
     # group: "swd"
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
     benchmark:
@@ -277,7 +281,8 @@ rule run_bootstrap:
             --random_seed {wildcards.run_id}
         """ 
 
-# localrule
+# Local rule that aggregates the SWD distributions from run_bootstrap into a single .npy file.
+# This rule is run once per sample/topology/parameter set combination
 rule aggregate_bootstrap:
     input:
         lambda wc: expand(
@@ -295,7 +300,8 @@ rule aggregate_bootstrap:
             --output {output.final_file}
         """
 
-# localrule
+# Local rule that writes a .json file for each hyperparameter set listed in the grid file. 
+# These are marked as temp, since they contain no information not contained in the grid file.
 rule prepare_hps:
     input:
         grid_file=GRID_FILE
@@ -313,6 +319,10 @@ rule prepare_hps:
             --output_dir {HPS_DIR}
         """
 
+# Trains and saves a single model with a single hyperparameter set. This rule is run once 
+# for each hyperparameter set for each model, for each sample/topology combination. The 
+# trained model is saved as a .json file for XGB and unnormXGB, and as a .pkl file for binned 
+# reweighting.
 rule train_model:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
@@ -325,8 +335,8 @@ rule train_model:
         model_dir=directory(MODEL_DIR)
     threads: 1
     resources:
-        mem_mb=scaled(4000),
-        runtime=scaled(180),
+        mem_mb=4000,
+        runtime=scaled(500),
         disk_mb=10000
     benchmark:
         BENCH_DIR + f"train_model_{{model}}/train_model_{{model}}_hp_{{run_id}}.tsv"
@@ -343,7 +353,8 @@ rule train_model:
             --output_dir {output.model_dir}
         """
 
-# Compute metrics for one hps for a given model
+# Computes the relevant metrics for a single trained model, and saves them to a .csv file. 
+# This is run once for each trained model for each sample/topology combination.
 rule compute_metrics:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
@@ -367,7 +378,7 @@ rule compute_metrics:
     # group: "tune"
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
 
@@ -393,8 +404,11 @@ rule compute_metrics:
             --output_file {output.metrics_file}
         """
 
-# Go through every model and every hyperparameter set, and gather the best metrics and models
-# localrule
+# Local rule that finds the best-performing model for every model in a given sample/topology,
+# according to the metric specified in the config. The hyperparameters and metrics for each 
+# model are saved in a single .json file. A symlink is created to each of the best-performing 
+# models in saved_models/{tag}/{sample}/{topology}/{model}. This rule is run once for each 
+# sample/topology combination.
 rule choose_models:
     input:
         lambda wc: [
@@ -430,9 +444,10 @@ rule choose_models:
             {params.selections}
         """
 
-# One 1D histogram per analysis parameter, so matplotlib rather than the sample dominates
-# the runtime here. The models plotted are the ones 'choose_models' symlinked, so this rule
-# depends on their paths rather than on any retrained copy of them.
+# Generates plots showing the reweighting performance of each model for every parameter included
+# in the config. For BDT-based reweighting models, plots of the training history are also 
+# generated. This rule is run once for each sample/topology combination, and the plots are saved 
+# as .pdf files.
 rule make_plots:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
@@ -451,7 +466,7 @@ rule make_plots:
 
     threads: 1
     resources:
-        mem_mb=scaled(4000),
+        mem_mb=4000,
         runtime=scaled(180),
         disk_mb=10000
 
@@ -475,6 +490,9 @@ rule make_plots:
             --binning_file {params.binning_file}
         """
 
+# Carries out the entire workflow, by requesting the outputs of the initialize_analysis
+# checkpoint for every sample, and the outputs of choose_model and make_plots for every
+# sample/topology combination. This rule is run once during the workflow.
 rule all:
     input:
         # The counts are requested explicitly so that every sample is scanned in one go,
@@ -483,12 +501,9 @@ rule all:
         metrics_files=all_metrics_files,
         figures=all_figure_dirs
 
-# Wildcard-free target running only the topology counting checkpoint on every sample.
-# The 'initialize_analysis' checkpoint itself carries a {sample} wildcard and so cannot be
-# asked for on the command line; ask for this rule instead:
-#     snakemake count_all_topologies --cores 8
-# Running it first makes the counts available to the checkpoints, so that a subsequent
-# dry run ('snakemake all -n') can resolve them and list every job of the workflow.
+# Carries out the intialize_analysis checkpoint for every sample by requesting its output.
+# This rule can be run before a dry run to see the full DAG, since the number of topologies
+# passing the event count check is only known after the checkpoint has run.
 rule count_all_topologies:
     input:
         counts_files=expand(INCLUDED_TOPOLOGIES_FILE, sample=SAMPLES)

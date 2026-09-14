@@ -55,6 +55,7 @@ In the `analysis` section, you can specify
 - `train_percentage`: the fraction of each sample to be used for training
 - `val_percentage` the fraction of each samples to be used for validation
     - the remaining events are used for testing
+- `downsampling`: the fraction of events to keep from the input files, to speed up the analysis for testing
 
 In the `parameters` section, you can specify
 - `reweighting`: the parameters used to train the reweighting models
