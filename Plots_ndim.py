@@ -61,11 +61,12 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
       distribution over the target distribution. The weights_dict is a dictionary containing the predicted weights for each method, 
       with the method name as key and the weights as value."""
     mh.style.use("DUNE")
+    target_norm = np.sum(target_weights) if target_weights is not None else len(target)
     with PdfPages(f"{output_file}") as pdf:
         for var in variables:
             #For the sake of the plots in this function, we use a given binning for each variable, specified in the dict_binning.
-            #If the variable is not present, we use a default binning : uniform between the 1st and 99th percentiles of the target distribution for this 
-            #variable.
+            #If the variable is not present, we use a default binning : uniform between the 1st and 99th percentiles of the 
+            #target distribution for this variable.
             i = variables.index(var)
             if var in dict_binning.keys():
                 x_min = dict_binning[var]["x_min"]
@@ -83,10 +84,13 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
 
             bin_centers = 0.5 * (bins[:-1] + bins[1:])
 
-            # Getting the distributions and their uncertainties, with a normalization to the total number of events
+            # Getting the distributions and their uncertainties, with a normalization to the total number of events.
+            # The original and target distribution are normalized to 1. The reweighted distributions are normalized by the same 
+            # factor as the target distribution.
+
             if target_weights is not None:
-                target_counts = np.histogram(target[:, i], bins=bins, weights = target_weights/np.sum(target_weights))[0]
-                target_counts_uncert = np.histogram(target[:, i], bins=bins, weights= (target_weights/np.sum(target_weights))**2)[0]
+                target_counts = np.histogram(target[:, i], bins=bins, weights = target_weights/target_norm)[0]
+                target_counts_uncert = np.histogram(target[:, i], bins=bins, weights= (target_weights/target_norm)**2)[0]
             else:
                 target_counts = np.histogram(target[:, i], bins=bins, weights = np.ones_like(target[:, i])/len(target))[0]
                 target_counts_uncert = np.histogram(target[:, i], bins=bins, weights= (np.ones_like(target[:, i])/len(target))**2)[0]
@@ -108,8 +112,8 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
         
             for k in range(len(weights_dict)):
                 key = list(weights_dict.keys())[k]
-                original_rw_counts, _ = np.histogram(original[:, i], bins=bins, weights= weights_dict[key]/np.sum(weights_dict[key]))
-                original_rw_counts_uncert = np.histogram(original[:, i], bins=bins, weights= (weights_dict[key]/np.sum(weights_dict[key]))**2)[0]
+                original_rw_counts, _ = np.histogram(original[:, i], bins=bins, weights= weights_dict[key]/target_norm)
+                original_rw_counts_uncert = np.histogram(original[:, i], bins=bins, weights= (weights_dict[key]/target_norm)**2)[0]
                 original_rw_uncertainty = np.sqrt(original_rw_counts_uncert)
                 original_rw_counts_list.append(original_rw_counts)
                 original_rw_counts_uncert_list.append(original_rw_uncertainty)
@@ -131,8 +135,8 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
             if add_wass_distance :
                 for key in weights_dict.keys():
                     wass_distance = ot.wasserstein_1d(original[:, i], target[:, i], 
-                                                u_weights = weights_dict[key]/np.sum(weights_dict[key]),
-                                                v_weights = target_weights/np.sum(target_weights) if target_weights is not None else None)
+                                                u_weights = weights_dict[key]/target_norm if target_weights is not None else None,
+                                                v_weights = target_weights/target_norm if target_weights is not None else None)
                     text_str += f"{key}: {wass_distance:.2g}, "
 
             if add_chi2:
@@ -225,6 +229,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                       nbins = 30, pull = False, output_file = "/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios_2D.pdf"):
     mh.style.use("DUNE")
     combinations = np.array(np.meshgrid(range(len(xlabels)), range(len(xlabels)))).T.reshape(-1, 2)
+    target_norm = np.sum(target_weights) if target_weights is not None else len(target)
     with PdfPages(f"{output_file}") as pdf:
         for combination in combinations:
             i, j = combination
@@ -233,13 +238,13 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                 bins_i = np.percentile(target[:, i], percents)
                 bins_j = np.percentile(target[:, j], percents)
                 if target_weights is not None:
-                    hist_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=target_weights/np.sum(target_weights))
+                    hist_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=target_weights/target_norm)
                 else:
                     hist_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=np.ones_like(target[:, i])/len(target))
                 for key in weights_dict.keys():
                     if pull:
-                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/np.sum(weights_dict[key]))
-                        hist_rw_uncert = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=(weights_dict[key]/np.sum(weights_dict[key]))**2)[0]
+                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/target_norm)
+                        hist_rw_uncert = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=(weights_dict[key]/target_norm)**2)[0]
                         sigma = np.sqrt(hist_rw_uncert)
 
                         hist_pull = np.divide(
@@ -281,7 +286,7 @@ def plot_2D_histogram(original, target, weights_dict, target_weights = None, xla
                         plt.close(fig)
 
                     else:
-                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/np.sum(weights_dict[key]))
+                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/target_norm)
                         ratio = np.divide(hist_rw, hist_target, out=np.zeros_like(hist_rw), where=hist_target > 0)
 
                         # mask invalid bins
