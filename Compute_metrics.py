@@ -13,7 +13,6 @@ import os
 import json
 from torch.utils.tensorboard import SummaryWriter
 import argparse
-import time
 
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="Train a reweighting model with one set of hyperparameters and evaluate it.")
@@ -26,7 +25,10 @@ if __name__ == "__main__":
     argparser.add_argument('--model', type=str, required=True, help='The reweighting model to train.')
     argparser.add_argument('--hyperparameters', type=str, required=True, help="Path to the JSON file containing the hyperparameters to train the model with.")
     argparser.add_argument('--topology', type=str, required=True, help='The topology to filter the training samples on.')
-    argparser.add_argument('--logdir', type=str, required=True, help="The directory where the tensorboard log file will be saved.")
+    argparser.add_argument('--logdir', type=str, required=True,
+                           help="The directory the tensorboard logs of this run are written to. It "
+                                "holds this run alone, so it is expected to be empty: the workflow "
+                                "declares it as an output and so clears it before every rerun.")
     argparser.add_argument('--n_directions', type=int, default=500, help="Number of directions to draw for each bootstrap")
     argparser.add_argument("--param_set_dict", type=str, required=True, help="JSON-encoded dict mapping each parameter set name to its list of parameters.")
     argparser.add_argument("--binning_file", type=str, required=True, help="Path to the json file containing the binning information for each parameter.")
@@ -47,8 +49,7 @@ if __name__ == "__main__":
     model = load_model(args.model, model_path)
     weights_test = predict_model(args.model, model, testing_samples[REWEIGHTING_SET]["original_test"])
 
-    run_name = "_".join(f"{key}={value}" for key, value in hyperparams.items())
-    writer = SummaryWriter(os.path.join(args.logdir, f"run_{run_name}_{int(time.time())}"))
+    writer = SummaryWriter(args.logdir)
     # The trained weights take the pre-weighted original distribution to the pre-weighted target one,
     # so they are multiplied by the pre-weights of the events to give their absolute weights.
     weight_dict = {
@@ -132,8 +133,9 @@ if __name__ == "__main__":
         if f"p_value_{set_name}" in metrics:
             print(f"p_value_{set_name} : {metrics[f'p_value_{set_name}']}")
 
-    # 'run_name' is set to '.' so that the hparams and metrics are written directly into the run
-    # directory built above, instead of a further, separately-timestamped subdirectory of it.
+    # 'run_name' is set to '.' so that the hparams and the metrics are written directly into the log
+    # directory, instead of a separately-timestamped subdirectory of it that would be a run of its own
+    # and would leave the log directory itself holding nothing but an empty event file.
     writer.add_hparams(hyperparams, metrics, run_name=".")
     writer.close()
 

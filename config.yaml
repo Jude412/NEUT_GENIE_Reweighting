@@ -59,6 +59,9 @@ analysis:
   # Optional fraction of each input file's events to read in (between 0 and 1)
   downsampling: ~
 
+  # Max number of target events to train on per topology (original will be scaled by same fraction)
+  max_training_events: 1000000
+
 parameters:
   reweighting: # parameters to train the reweighting models on
     - Enu_true
@@ -81,12 +84,11 @@ parameters:
 
   binning_file: "/vols/dune/jmm224/t2knova/reweighting/binnings.json"
 
-
 models:
   model_list:
     - binning
     - XGB
-    - unnormXGB
+    # - unnormXGB
   # choose from binning, XGB (XGBoost), unnormXGB (XGB without normalised training classes)
 
   # Json file holding the hyperparameter grid every model is fine-tuned over
@@ -122,4 +124,4 @@ swd_bootstrapping:
   # n_directions: 50
 
 output:
-  tag: "long_training"
+  tag: "1M_training"

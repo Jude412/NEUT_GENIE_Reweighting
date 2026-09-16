@@ -2,6 +2,7 @@ configfile: "config.yaml"
 
 from itertools import chain
 import glob
+import hashlib
 import json
 import os
 import re
@@ -23,7 +24,19 @@ MODES = config["analysis"]["modes"]
 TOPOLOGIES = config["analysis"]["topologies"]
 # Optional fraction of each input file's events to read in; unset (None) reads every event.
 DOWNSAMPLING = config["analysis"].get("downsampling")
+# Optional maximum number of events to be used for training; unset (None) trains on every event.
+MAX_TRAINING_EVENTS = config["analysis"].get("max_training_events")
+
 RUNS = range(config["swd_bootstrapping"]["runs"])
+
+def training_seed(sample, topology):
+    """Return the seed the training sample of a sample and topology is capped with.
+
+    It depends on the sample and the topology only, so that every hyperparameter set of a scan
+    trains on the same subset and the differences between its runs are differences between
+    hyperparameters rather than between the events each run happened to be given."""
+    return int(hashlib.sha256(f"{sample}/{topology}".encode()).hexdigest()[:8], 16)
+
 
 # ---------------------------------------------------------------------------
 # Sets of analysis parameters
@@ -119,6 +132,11 @@ METRICS_DIR      = BASE_METRICS_DIR + f"{{run_id}}/"
 FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/{{topology}}/"
 HPS_DIR          = f"hps/{TAG}/"
 TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{{topology}}/"
+# One TensorBoard run per fine-tuning run, keyed like its metrics and its model so that the three
+# trees line up. It is an output of 'compute_metrics' rather than a side effect, so that rerunning a
+# run replaces its logs: a SummaryWriter opened on a directory that already holds events appends to
+# it, and TensorBoard would then read the run as holding two values of every metric.
+TENSORBOARD_RUN_DIR = TENSORBOARD_DIR + "{model}/{run_id}/"
 
 # Benchmarks hold the peak memory and wall time of every submitted job, and are what the
 # resource requests of the rules are calibrated from. They mirror the wildcards of the rule
@@ -219,7 +237,7 @@ checkpoint initialize_analysis:
     resources:
         mem_mb=4000,
         runtime=scaled(180),
-        disk_mb=10000
+        # disk_mb=10000
 
     benchmark:
         BASE_BENCH_DIR + "initialize_analysis.tsv"
@@ -261,9 +279,9 @@ rule run_bootstrap:
     # group: "swd"
     threads: 1
     resources:
-        mem_mb=4000,
-        runtime=scaled(180),
-        disk_mb=10000
+        mem_mb=3000,
+        runtime=scaled(120),
+        # disk_mb=10000
     benchmark:
         BENCH_DIR + "bootstrap_swd_{param_set}/run_bootstrap_{run_id}.tsv"
     conda:
@@ -330,14 +348,16 @@ rule train_model:
     params:
         sample_dir=BASE_SAMPLES_DIR,
         model=lambda wc: wc.model,
-        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET]
+        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET],
+        max_events=MAX_TRAINING_EVENTS,
+        seed=lambda wc: training_seed(wc.sample, wc.topology)
     output:
         model_dir=directory(MODEL_DIR)
     threads: 1
     resources:
         mem_mb=4000,
-        runtime=scaled(500),
-        disk_mb=10000
+        runtime=scaled(180),
+        # disk_mb=10000
     benchmark:
         BENCH_DIR + f"train_model_{{model}}/train_model_{{model}}_hp_{{run_id}}.tsv"
     conda:
@@ -350,7 +370,9 @@ rule train_model:
             --model {params.model} \
             --hyperparameters {input.hparam_file} \
             --reweighting_params {params.reweight_params} \
-            --output_dir {output.model_dir}
+            --output_dir {output.model_dir} \
+            --max_events {params.max_events} \
+            --seed {params.seed}
         """
 
 # Computes the relevant metrics for a single trained model, and saves them to a .csv file. 
@@ -366,21 +388,23 @@ rule compute_metrics:
     params:
         sample_dir=BASE_SAMPLES_DIR,
         model=lambda wc: wc.model,
-        logdir=lambda wc: TENSORBOARD_DIR.format(sample=wc.sample, topology=wc.topology) + wc.model + "/",
+        logdir=lambda wc: TENSORBOARD_RUN_DIR.format(sample=wc.sample, topology=wc.topology,
+                                                     model=wc.model, run_id=wc.run_id),
         binning_file=config["parameters"]["binning_file"],
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set_dict=json.dumps(PARAM_SET_DICT),
         swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS))
 
     output:
-        metrics_file=METRICS_DIR + "metrics.csv"
+        metrics_file=METRICS_DIR + "metrics.csv",
+        tensorboard_dir=directory(TENSORBOARD_RUN_DIR)
 
     # group: "tune"
     threads: 1
     resources:
         mem_mb=4000,
         runtime=scaled(180),
-        disk_mb=10000
+        # disk_mb=10000
 
     benchmark:
         BENCH_DIR + "compute_metrics_{model}/compute_metrics_{model}_{run_id}.tsv"
@@ -460,7 +484,7 @@ rule make_plots:
         sample_dir=BASE_SAMPLES_DIR,
         binning_file=config["parameters"]["binning_file"],
         output_dir=FIG_DIR,
-        model_dir=ALL_MODELS_DIR,
+        model_dir=FINAL_MODEL_DIR,
         model_list=MODELS,
         reweight_params=PARAM_SET_DICT[REWEIGHTING_SET]
 
@@ -468,7 +492,7 @@ rule make_plots:
     resources:
         mem_mb=4000,
         runtime=scaled(180),
-        disk_mb=10000
+        # disk_mb=10000
 
     benchmark:
         BENCH_DIR + "make_plots.tsv"
