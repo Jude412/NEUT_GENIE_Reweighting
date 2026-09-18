@@ -7,7 +7,7 @@ import json
 import os
 import re
 
-from List_hyperparameters import number_of_sets
+from List_hyperparameters import labels_of
 from Split_sizes import minimum_events
 from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET
 from Train_predict import model_extension
@@ -16,9 +16,7 @@ ENV = "environment.yaml"
 TAG = config["output"]["tag"]
 MODELS = config["models"]["model_list"]
 GRID_FILE = config["models"]["grid_file"]
-# The number of fine-tuning runs of a model is the size of its hyperparameter grid, so that the
-# grid is only ever described in the grid file.
-NUMBER_OF_SETS = {model: number_of_sets(GRID_FILE, model) for model in MODELS}
+HP_LABELS = {model: labels_of(GRID_FILE, model) for model in MODELS}
 SELECTION_METRIC = config["models"]["selection_metric"]
 MODES = config["analysis"]["modes"]
 TOPOLOGIES = config["analysis"]["topologies"]
@@ -30,11 +28,8 @@ MAX_TRAINING_EVENTS = config["analysis"].get("max_training_events")
 RUNS = range(config["swd_bootstrapping"]["runs"])
 
 def training_seed(sample, topology):
-    """Return the seed the training sample of a sample and topology is capped with.
+    """Return the seed the training sample of a sample and topology is capped with."""
 
-    It depends on the sample and the topology only, so that every hyperparameter set of a scan
-    trains on the same subset and the differences between its runs are differences between
-    hyperparameters rather than between the events each run happened to be given."""
     return int(hashlib.sha256(f"{sample}/{topology}".encode()).hexdigest()[:8], 16)
 
 
@@ -124,19 +119,15 @@ BASE_SAMPLES_DIR = f"saved_samples/{TAG}/{{sample}}/"
 INIT_SWD_DIR     = f"saved_swd_distribution/{TAG}/{{sample}}/{{topology}}/"
 ALL_MODELS_DIR   = f"saved_models/{TAG}/{{sample}}/{{topology}}/"
 BASE_MODEL_DIR   = ALL_MODELS_DIR + f"{{model}}/"
-MODEL_DIR        = BASE_MODEL_DIR + f"{{run_id}}/"
+MODEL_DIR        = BASE_MODEL_DIR + f"{{hp_id}}/"
 FINAL_MODEL_DIR  = f"saved_final_models/{TAG}/{{sample}}/{{topology}}/"
 ALL_METRICS_DIR  = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/"
 BASE_METRICS_DIR = f"saved_metrics/{TAG}/{{sample}}/{{topology}}/{{model}}/"
-METRICS_DIR      = BASE_METRICS_DIR + f"{{run_id}}/"
+METRICS_DIR      = BASE_METRICS_DIR + f"{{hp_id}}/"
 FIG_DIR          = f"saved_figures/{TAG}/{{sample}}/{{topology}}/"
 HPS_DIR          = f"hps/{TAG}/"
 TENSORBOARD_DIR  = f"TensorBoard/{TAG}/{{sample}}/{{topology}}/"
-# One TensorBoard run per fine-tuning run, keyed like its metrics and its model so that the three
-# trees line up. It is an output of 'compute_metrics' rather than a side effect, so that rerunning a
-# run replaces its logs: a SummaryWriter opened on a directory that already holds events appends to
-# it, and TensorBoard would then read the run as holding two values of every metric.
-TENSORBOARD_RUN_DIR = TENSORBOARD_DIR + "{model}/{run_id}/"
+TENSORBOARD_RUN_DIR = TENSORBOARD_DIR + "{model}/{hp_id}/"
 
 # Benchmarks hold the peak memory and wall time of every submitted job, and are what the
 # resource requests of the rules are calibrated from. They mirror the wildcards of the rule
@@ -165,17 +156,22 @@ def swd_distributions_of(param_sets):
 # Hyperparameter grid files are sample-independent (shared search space).
 HPS_FILES = []
 for model in MODELS:
-    for run_id in range(NUMBER_OF_SETS[model]):
-        HPS_FILES.append(os.path.join(HPS_DIR, f"{model}/{model}_hp_{run_id}.json"))
+    for hp_id in HP_LABELS[model]:
+        HPS_FILES.append(os.path.join(HPS_DIR, f"{model}/{model}_hp_{hp_id}.json"))
 
 # Wildcard constraint: sample paths contain only word characters and slashes.
 # The topology wildcard is restricted to the topology names listed in the config file,
 # which also removes the ambiguity with the (slash-containing) sample wildcard.
-# The parameter set wildcard is likewise restricted to the configured sets.
+# The parameter set and model wildcards are likewise restricted to the configured ones.
+# 'hp_id' labels a point of a hyperparameter grid and 'run_id' numbers a bootstrap run: they
+# name a single directory each, and constraining them keeps them from swallowing a path
+# separator and so from reaching into the (slash-containing) sample wildcard.
 wildcard_constraints:
     sample="[^.]+",
     topology="|".join(re.escape(str(t)) for t in TOPOLOGIES),
     param_set="|".join(re.escape(str(s)) for s in PARAM_SETS),
+    model="|".join(re.escape(str(m)) for m in MODELS),
+    hp_id=r"[^/]+",
     run_id=r"\d+"
 
 INCLUDED_TOPOLOGIES_FILE = f"saved_samples/{TAG}/{{sample}}/included_topologies.json"
@@ -344,7 +340,7 @@ rule prepare_hps:
 rule train_model:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
-        hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json"
+        hparam_file=HPS_DIR + "{model}/{model}_hp_{hp_id}.json"
     params:
         sample_dir=BASE_SAMPLES_DIR,
         model=lambda wc: wc.model,
@@ -359,7 +355,7 @@ rule train_model:
         runtime=scaled(180),
         # disk_mb=10000
     benchmark:
-        BENCH_DIR + f"train_model_{{model}}/train_model_{{model}}_hp_{{run_id}}.tsv"
+        BENCH_DIR + f"train_model_{{model}}/train_model_{{model}}_hp_{{hp_id}}.tsv"
     conda:
         ENV
     shell:
@@ -381,7 +377,7 @@ rule compute_metrics:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
         model_dir = MODEL_DIR,
-        hparam_file=HPS_DIR + "{model}/{model}_hp_{run_id}.json",
+        hparam_file=HPS_DIR + "{model}/{model}_hp_{hp_id}.json",
         swd_distributions=expand(swd_distribution_file("{param_set}"),
                                  param_set=PARAM_SETS, allow_missing=True)
 
@@ -389,7 +385,7 @@ rule compute_metrics:
         sample_dir=BASE_SAMPLES_DIR,
         model=lambda wc: wc.model,
         logdir=lambda wc: TENSORBOARD_RUN_DIR.format(sample=wc.sample, topology=wc.topology,
-                                                     model=wc.model, run_id=wc.run_id),
+                                                     model=wc.model, hp_id=wc.hp_id),
         binning_file=config["parameters"]["binning_file"],
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set_dict=json.dumps(PARAM_SET_DICT),
@@ -407,7 +403,7 @@ rule compute_metrics:
         # disk_mb=10000
 
     benchmark:
-        BENCH_DIR + "compute_metrics_{model}/compute_metrics_{model}_{run_id}.tsv"
+        BENCH_DIR + "compute_metrics_{model}/compute_metrics_{model}_{hp_id}.tsv"
 
     conda:
         ENV
@@ -436,10 +432,10 @@ rule compute_metrics:
 rule choose_models:
     input:
         lambda wc: [
-            METRICS_DIR.format(sample=wc.sample, topology=wc.topology, model=model, run_id=run_id)
+            METRICS_DIR.format(sample=wc.sample, topology=wc.topology, model=model, hp_id=hp_id)
             + f"metrics.csv"
             for model in MODELS
-            for run_id in range(NUMBER_OF_SETS[model])
+            for hp_id in HP_LABELS[model]
         ]
     output:
         metrics_file=f"saved_metrics/{TAG}/{{sample}}/{{topology}}/metrics.json",
@@ -519,8 +515,6 @@ rule make_plots:
 # sample/topology combination. This rule is run once during the workflow.
 rule all:
     input:
-        # The counts are requested explicitly so that every sample is scanned in one go,
-        # rather than one sample at a time as the checkpoints get resolved.
         included_topologies_files=expand(INCLUDED_TOPOLOGIES_FILE, sample=SAMPLES),
         metrics_files=all_metrics_files,
         figures=all_figure_dirs

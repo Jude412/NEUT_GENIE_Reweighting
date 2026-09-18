@@ -93,6 +93,27 @@ chosen sets are written in `set_hyperparameters/{tag}/{sample}/{topology}/hyperp
 final training uses. Nothing has to be written by hand: to change the hyperparameters that are scanned, change the
 grid file.
 
+#### Hyperparameter labels
+
+Every point of a grid is identified by a label built from its hyperparameter values, `hp_id`. The label lists every 
+hyperparameter of the set as `name-value`, sorted by name and joined with underscores:
+
+```
+n_bins-10_n_neighs-1
+alpha-0_early_stopping_rounds-50_gamma-0_lambda-1_learning_rate-0.01_max_depth-3_min_child_weight-1_n_estimators-5000_subsample-1
+```
+
+That label names the directory the point's model, metrics, TensorBoard logs and benchmarks are written to, so a
+point that has already been trained keeps its outputs whatever else the grid holds. **Adding a value to a
+hyperparameter's list therefore only trains the new points**.
+
+Two things do relabel a whole grid, and so retrain it:
+
+- **adding or removing a hyperparameter**, since the label holds every hyperparameter of the set. This is
+  intended: the existing models were trained on a different set of hyperparameters and are genuinely stale.
+- **changing a value**, which is likewise the point — the models trained with the old value are not models of the
+  new one.
+
 ## Running the analysis
 
 Once all the above steps are completed, you are ready to run the analysis.
@@ -139,15 +160,15 @@ The outputs of the analysis are saved in the following directories:
 #### Models
 - `saved_models/{tag}/{sample}/{topology}/`: the best trained models for each topology and model type, saved as
   `.json` files for XGB and unnormXGB, and `.pkl` files for binned reweighting
-- `saved_models/{tag}/{sample}/{topology}/{model}/{run_id}/`: all the trained models for each topology and model type,
-  saved as `.json` files for XGB and unnormXGB, and `.pkl` files for binned reweighting
+- `saved_models/{tag}/{sample}/{topology}/{model}/{hp_id}/`: all the trained models for each topology and model type,
+  saved as `.json` files for XGB and unnormXGB, and `.pkl` files for binned reweighting.
 
 #### Metrics
 - `saved_swd_distribution/{tag}/{sample}/{topology}/{param_set}/`: the null SWD distribution for the target test
   sample in the parameter space defined by `param_set`, saved as `.npy` files
 - `saved_metrics/{tag}/{sample}/{topology}/`: the metrics and hyperparameters for the best trained models for each
   topology and model type, saved as a `.json` file.
-- `saved_metrics/{tag}/{sample}/{topology}/{model}/{run_id}/`: the metrics and hyperparameters for all the trained
+- `saved_metrics/{tag}/{sample}/{topology}/{model}/{hp_id}/`: the metrics and hyperparameters for all the trained
   models for each topology and model type, saved as a `.csv` file.
 
 #### Figures
