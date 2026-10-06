@@ -13,6 +13,7 @@ import hashlib
 import numpy as np
 import ot
 from scipy.stats import chi2 as chi2_dist
+from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET
 
 
 def swd_direction_rng(base_seed, param_set):
@@ -70,21 +71,19 @@ def chi2_hist_axis(original, target, rw_weights, axis_number, target_weights = N
         dof = 1
     return chi2, dof
 
-def chi2_hist_naxis(original, target, rw_weights, binning_dict, target_weights = None, list_param_interest = ["Enu_true", "Plep", "CosLep"]):
-    n = original.shape[1]
+def binning_of(param, binning_dict):
+    """Return the (n_bins, x_min, x_max) a parameter is histogrammed with: the ones of the binning
+    file when it lists the parameter, and 30 bins over the 1-99% range of the target otherwise."""
+    if param in binning_dict:
+        return binning_dict[param]["n_bins"], binning_dict[param]["x_min"], binning_dict[param]["x_max"]
+    return 30, None, None
+
+def chi2_hist_naxis(original, target, rw_weights, binning_dict, target_weights = None, list_param_interest = ["Enu_true", "Plep", "CosLep"], n_events=None):
     chi2 = 0
     dof = 0
-    for var in list_param_interest:
-        axis_number = list_param_interest.index(var)
-        if var in binning_dict.keys():
-            x_min = binning_dict[var]["x_min"]
-            x_max = binning_dict[var]["x_max"]
-            n_bins = binning_dict[var]["n_bins"]
-        else :
-            x_min = None
-            x_max = None
-            n_bins = 30
-        chi2_val, dof_val = chi2_hist_axis(original, target, rw_weights, axis_number, target_weights, n_bins=n_bins, x_min=x_min, x_max=x_max)
+    for axis_number, var in enumerate(list_param_interest):
+        n_bins, x_min, x_max = binning_of(var, binning_dict)
+        chi2_val, dof_val = chi2_hist_axis(original, target, rw_weights, axis_number, target_weights, n_bins=n_bins, x_min=x_min, x_max=x_max, n_events=n_events)
         chi2 += chi2_val
         dof += dof_val
     return chi2, dof
@@ -140,15 +139,20 @@ def compute_swd(original, target, weights_dict, target_weights = None, n_directi
 """We then use this function to compute a p-value for the swd we obtained with a given swd distribution 
 obtained from bootstraping the target distribution with the Bootstrap_SWD function.  """
 
-def bootstrap_swd(target, n_bootstrap=1000, n_directions=500):
-    """Returns a list of SWD values obtained by bootstraping the target distribution and computing the SWD between the two bootstraped distributions."""
+def bootstrap_swd(target, n_bootstrap=1000, n_directions=500, sample_size=None):
+    """Returns a list of SWD values obtained by bootstraping the target distribution and computing the SWD between the two bootstraped distributions.
+
+    Each of the two bootstrapped distributions holds 'sample_size' events (every event of the target
+    when unset), so that the list is the null distribution of the SWD between two independent samples
+    of that size: the data-sized subsamples 'compute_all_metrics' compares are read against it."""
     list_swd = []
 
     target_dist, target_weights = target
+    sample_size = target_dist.shape[0] if sample_size is None else sample_size
 
     for _ in range(n_bootstrap):
-        index1 = np.random.choice(target_dist.shape[0], size=target_dist.shape[0], replace=True)
-        index2 = np.random.choice(target_dist.shape[0], size=target_dist.shape[0], replace=True)
+        index1 = np.random.choice(target_dist.shape[0], size=sample_size, replace=True)
+        index2 = np.random.choice(target_dist.shape[0], size=sample_size, replace=True)
         target_bootstrap_1 = target_dist[index1]
         target_bootstrap_2 = target_dist[index2]
 
@@ -179,12 +183,110 @@ def bootstrap_swd(target, n_bootstrap=1000, n_directions=500):
     return list_swd
 
 
+def swd_p_value(swd_value, swd_distribution):
+    """Fraction of the bootstrapped SWD distribution lying above a given SWD value."""
+    return 1 - np.sum(swd_distribution <= swd_value) / len(swd_distribution)
+
 def compute_p_value(swd_value_dict, swd_distribution):
     """Compute the p-value for a given swd value and a swd distribution obtained from bootstraping the target distribution."""
     p_value_dict = {}
     for key in swd_value_dict.keys():
         swd_value = swd_value_dict[key]
-        p_value = 1 - np.sum(swd_distribution <= swd_value) / len(swd_distribution)
+        p_value = swd_p_value(swd_value, swd_distribution)
         p_value_dict[key] = p_value
         print(f"P-value for {key}: SWD value {swd_value}: {p_value}")
     return p_value_dict
+
+
+"""The functions below compute the metrics written by 'Compute_metrics.py' and 'Compute_baseline_metrics.py',
+both on the full test samples and at the scale of the real downstream analysis ('data scale'), whose
+sample is much smaller than the test samples and so is much less sensitive to a mismodelling."""
+
+def cap_data_n_events(n_events, sample_size):
+    """Return the data-scale number of events as an integer, capped at the number of events of the
+    test sample(s) it is drawn from: a topology whose test sample is smaller than its data-scale one
+    has its data-scale metrics computed on the whole test sample instead."""
+    n_events = int(round(n_events))
+    if n_events > sample_size:
+        print(f"Warning: the data-scale number of events ({n_events}) is larger than the test sample "
+              f"({sample_size}): the data-scale metrics are computed on {sample_size} events instead.")
+        return sample_size
+    return n_events
+
+def data_subsample_indices(n_original, n_target, n_events, n_subsamples, seed):
+    """Return 'n_subsamples' pairs of (original, target) event indices, each drawing 'n_events'
+    events of the original and of the target test samples without replacement.
+
+    Every parameter set is read from the same files with the same topology filter, so the indices
+    apply to the samples of all of them. The baseline job and every 'compute_metrics' job of a sample
+    and topology are given the same seed, so that they are all evaluated on the same subsamples and
+    the hyperparameter sets differ only by what the reweighting did, not by which events were drawn."""
+    rng = np.random.default_rng(seed)
+    return [(np.sort(rng.choice(n_original, size=n_events, replace=False)),
+             np.sort(rng.choice(n_target, size=n_events, replace=False)))
+            for _ in range(n_subsamples)]
+
+def compute_all_metrics(testing_samples, weights, param_set_dict, binning_dict, swd_distributions,
+                        swd_seed, n_directions, n_events, subsamples):
+    """Return the {metric name: value} dictionary of the original test sample carrying the absolute
+    weights 'weights' against the target test sample.
+
+    'testing_samples' maps every parameter set to its {"original_test", "target_test"} samples, and
+    'swd_distributions' every parameter set to the npy file of its bootstrapped SWD distribution, drawn
+    at the data scale. The metrics are, for every parameter set:
+      - 'SWD_{set}': the SWD between the full test samples, along the directions 'swd_seed' gives.
+      - 'data_SWD_{set}' and 'data_p_value_{set}': the mean SWD of the data-sized 'subsamples' (as given
+        by 'data_subsample_indices'), and the median of their p-values against the bootstrapped SWD
+        distribution. A single subsample would make the hyperparameter selection pick the luckiest draw.
+      - 'chi2_dof_{set}' and 'chi2_p_value_{set}' on the full test samples, and 'data_chi2_dof_{set}'
+        and 'data_chi2_p_value_{set}' with their uncertainties scaled to 'n_events' events.
+    and the same chi2 metrics for every analysis parameter taken on its own, plus 'norm_test'."""
+    # 'compute_swd' takes a dictionary of weights, of which this is the only key.
+    key = "weights"
+    # Normalisation closure on the test sample: the summed reweighted original over the summed target,
+    # 1 for a correctly normalised model. Every other metric normalises both samples to 1 and so is
+    # blind to it.
+    metrics = {"norm_test": np.sum(weights) / np.sum(testing_samples[REWEIGHTING_SET]["target_test"][1])}
+
+    for set_name, samples in testing_samples.items():
+        original, _ = samples["original_test"]
+        target, target_weight = samples["target_test"]
+
+        # A fresh generator is given to every call, so that the full test samples and every subsample
+        # are projected along the same directions.
+        metrics[f"SWD_{set_name}"] = compute_swd(original, target, {key: weights},
+                                                 target_weights=target_weight, n_directions=n_directions,
+                                                 rng=swd_direction_rng(swd_seed, set_name))[key]
+        data_swds = [compute_swd(original[original_index], target[target_index], {key: weights[original_index]},
+                                 target_weights=target_weight[target_index], n_directions=n_directions,
+                                 rng=swd_direction_rng(swd_seed, set_name))[key]
+                     for original_index, target_index in subsamples]
+        metrics[f"data_SWD_{set_name}"] = float(np.mean(data_swds))
+        metrics[f"data_p_value_{set_name}"] = float("nan")
+        if set_name in swd_distributions:
+            swd_distribution = np.load(swd_distributions[set_name])
+            metrics[f"data_p_value_{set_name}"] = float(np.median([swd_p_value(swd, swd_distribution)
+                                                                   for swd in data_swds]))
+        else:
+            print(f"Warning: no bootstrapped SWD distribution given for the parameter set '{set_name}': "
+                  "its data-scale p-value is not computed.")
+
+        for prefix, scale in (("", None), ("data_", n_events)):
+            chi2, dof = chi2_hist_naxis(original, target, weights, binning_dict, target_weight,
+                                        param_set_dict[set_name], n_events=scale)
+            metrics[f"{prefix}chi2_dof_{set_name}"] = chi2/dof if dof > 0 else 0
+            metrics[f"{prefix}chi2_p_value_{set_name}"] = chi2_p_value(chi2, dof)
+
+    # Chi2 of every analysis parameter taken on its own.
+    all_params_original, _ = testing_samples[ALL_PARAMS_SET]["original_test"]
+    all_params_target, all_params_target_weight = testing_samples[ALL_PARAMS_SET]["target_test"]
+    for param_index, param in enumerate(param_set_dict[ALL_PARAMS_SET]):
+        n_bins, x_min, x_max = binning_of(param, binning_dict)
+        for prefix, scale in (("", None), ("data_", n_events)):
+            chi2, dof = chi2_hist_axis(all_params_original, all_params_target, weights,
+                                       axis_number=param_index, target_weights=all_params_target_weight,
+                                       n_bins=n_bins, x_min=x_min, x_max=x_max, n_events=scale)
+            metrics[f"{prefix}chi2_dof_{param}"] = chi2/dof if dof > 0 else 0
+            metrics[f"{prefix}chi2_p_value_{param}"] = chi2_p_value(chi2, dof)
+
+    return metrics

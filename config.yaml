@@ -37,7 +37,8 @@ analysis:
 
 parameters:
   # parameters to train the reweighting models on
-  reweighting: ["Enu_true", "PLep", "CosLep", "q0", "q3", "Q2", "W", "N_pi", "N_pi0", "N_pip", "N_pim", "N_thresh_p", "y", "Eav", "PTlep"]
+  # reweighting: ["Enu_true", "PLep", "CosLep", "q0", "q3", "Q2", "W", "N_pi", "N_pi0", "N_pip", "N_pim", "N_thresh_p", "y", "Eav", "PTlep"]
+  reweighting: ["Enu_true", "PLep", "CosLep", "PTlep", "Eav"]
 
   # Sets of parameters the metrics are computed on, each named by its key. Samples, bootstrapped
   # SWD distributions and metrics are produced for every set listed here.
@@ -48,16 +49,16 @@ parameters:
     # 3D: ["Enu_true", "PLep", "CosLep"]
     NIWG: ["Enu_true", "PLep", "CosLep", "q0", "q3", "Q2", "W", "N_pi"]
     Sel: ["N_pi0", "N_pip", "N_pim", "N_thresh_p", "y"]
-    # NIWG_Sel_RW: ["Enu_true", "PLep", "CosLep", "q0", "q3", "Q2", "W", "N_pi", "N_pi0", "N_pip", "N_pim", "N_thresh_p", "y", "Eav", "PTlep"]
+    NIWG_Sel_RW: ["Enu_true", "PLep", "CosLep", "q0", "q3", "Q2", "W", "N_pi", "N_pi0", "N_pip", "N_pim", "N_thresh_p", "y", "Eav", "PTlep"]
 
   # parameters to plot distributions of (in addition to all parameters listed in other sets)
-  extra: ["W", "y", "Mode"]
+  extra: []
 
   binning_file: "/vols/dune/jmm224/t2knova/reweighting/binnings.json"
 
 models:
   model_list:
-    # - binning
+    - binning
     - XGB
     # - unnormXGB
   # choose from binning, XGB (XGBoost), unnormXGB (XGB without normalised training classes)
@@ -67,7 +68,7 @@ models:
 
   # Metric the best hyperparameter set of every model is picked with, and whether it is
   # minimised ("min") or maximised ("max"). The metrics are named after the parameter sets
-  # above (ex: SWD_3D, p_value_8D, chi2_dof_all).
+  # above (ex: SWD_3D, data_p_value_8D, chi2_dof_all, data_chi2_dof_all).
   selection_metric:
     binning:
       metric: SWD_reweighting
@@ -93,6 +94,14 @@ swd_bootstrapping:
   # runs: 1
   # n_samples: 5
   # n_directions: 50
+
+data_scale:
+  # The metrics prefixed 'data_' are computed at the number of events the real downstream analysis
+  # will use (Constants.DATA_N_EVENTS, split across topologies by their target rate), rather than on
+  # the full test sample. The SWD bootstrap above is drawn at that size too.
+  #   n_subsamples       the number of data-sized subsamples of the original and target test samples
+  #                      the data-scale SWD (mean) and p-value (median) of every run are taken over.
+  n_subsamples: 10
 
 output:
   tag: "full_params2"

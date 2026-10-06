@@ -3,6 +3,8 @@
 Kept in their own module, with no dependency on either of them, so that they can each import
 what they need from here without creating a circular import between the two of them."""
 
+import json
+
 # Name of the column holding the total weight of the events in the sample files.
 WEIGHT_COLUMN = "PreWeight"
 # Name of the column holding the topology code of the events. It is also the column samples are
@@ -28,9 +30,18 @@ TOPOLOGY_CODES = {
 
 # Total number of raw events the real downstream analysis will use for a sample, overriding
 # DEFAULT_DATA_N_EVENTS. Used by 'Make_plots.py' to scale 'plot_histograms' uncertainties down to
-# that many events for '1Dhist_data.pdf', instead of the much larger test-sample statistics.
-DEFAULT_DATA_N_EVENTS = 1_000_000
+# that many events for '1Dhist_data.pdf', instead of the much larger test-sample statistics, and by
+# the metric scripts and 'Bootstrap_swd.py' to compute the data-scale metrics.
+DEFAULT_DATA_N_EVENTS = 130400
 DATA_N_EVENTS = {}
+
+def data_n_events_of(total_n_events, target_topology_rates_file, topology):
+    """Return the number of raw events the real downstream analysis will use for one topology: the
+    total number of events of the sample, split across its topologies by the summed PreWeight of
+    their target events, as written to 'target_topology_rates_file' by 'Init.py'."""
+    with open(target_topology_rates_file) as f:
+        topology_rates = json.load(f)
+    return total_n_events * topology_rates[topology] / sum(topology_rates.values())
 
 def topology_code(topology):
     """Return the integer code of a topology given either its name (ex: 'CC1pipm') or its code (ex: 1)."""

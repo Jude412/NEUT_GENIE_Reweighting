@@ -8,7 +8,7 @@ configfiles:
 
 # Maximum number of jobs queued or running at once. The whole cluster holds at most 20000 jobs
 # (MaxJobCount), shared between every user.
-jobs: 10000
+jobs: 5000
 
 # Rules without explicit resources fall back to these. Runtimes are in minutes.
 default-resources:

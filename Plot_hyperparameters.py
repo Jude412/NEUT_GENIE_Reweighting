@@ -39,13 +39,18 @@ CUT_COLUMNS = ("tag", "sample", "topology")
 
 # The families the metric names of 'Compute_metrics.py' are built from, and the label they are given on
 # the plots. The longest family matching a name wins, so that 'chi2_p_value_8D' is read as a chi2 p-value
-# rather than as a p-value of the parameter set 'chi2'.
+# rather than as a p-value of the parameter set 'chi2'. 'p_value' is only written by runs from before the
+# p-values were computed at the data scale, and is kept so that their metrics can still be plotted.
 METRIC_FAMILIES = {
     "SWD": "SWD",
     "p_value": "p-value",
     "chi2_dof": r"$\chi^2$/dof",
     "chi2_p_value": r"$\chi^2$ p-value",
     "norm": r"$\Sigma w_{reweighted} / \Sigma w_{target}$",
+    "data_SWD": "Data-scale SWD",
+    "data_p_value": "Data-scale p-value",
+    "data_chi2_dof": r"Data-scale $\chi^2$/dof",
+    "data_chi2_p_value": r"Data-scale $\chi^2$ p-value",
 }
 
 # The metrics that carry no parameter set in their name, written for the XGBoost models only.
@@ -430,11 +435,12 @@ def print_available(runs, model, hyperparameters, scanned, metrics, metrics_dir)
 
     print("Metrics:")
     baselines = [metric for metric in metrics if metric.startswith(BASELINE_PREFIX)]
-    for family in ("SWD", "p_value", "chi2_dof", "chi2_p_value"):
+    for family in ("SWD", "p_value", "chi2_dof", "chi2_p_value",
+                   "data_SWD", "data_p_value", "data_chi2_dof", "data_chi2_p_value"):
         listed = [metric for metric in metrics
                   if not metric.startswith(BASELINE_PREFIX) and metric.startswith(f"{family}_")]
         if listed:
-            print(f"  {family + ':':16s}{', '.join(listed)}")
+            print(f"  {family + ':':20s}{', '.join(listed)}")
     training = [metric for metric in metrics if metric in TRAINING_METRICS]
     if training:
         print(f"  {'training:':16s}{', '.join(training)}")

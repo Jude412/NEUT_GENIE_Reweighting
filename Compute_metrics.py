@@ -6,12 +6,11 @@ model nor its hyperparameters, so 'Compute_baseline_metrics.py' computes them on
 of a sample and topology and this script merges that file's columns into its own."""
 
 #imports
-from Metrics_ndim import (compute_swd, compute_p_value, chi2_dof, chi2_hist_axis, chi2_p_value,
-                          swd_direction_rng)
-from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET, named_paths_from_args
+from Constants import data_n_events_of
+from Metrics_ndim import cap_data_n_events, compute_all_metrics, data_subsample_indices
+from Param_sets import REWEIGHTING_SET, named_paths_from_args
 from Sample_io import load_samples
 from Train_predict import best_iteration_of, predict_model, train_model, load_model
-import numpy as np
 import pandas as pd
 import os
 import json
@@ -48,6 +47,18 @@ if __name__ == "__main__":
                            help="Seed the SWD projection directions are drawn from. It must be the one the "
                                 "baseline of this sample and topology was computed with, so that the two sets "
                                 "of distances are measured along the same directions.")
+    argparser.add_argument("--data_n_events", type=float, required=True,
+                           help="Total number of raw events the real downstream analysis will use for this "
+                                "sample, split across topologies by '--target_topology_rates_file'. The "
+                                "data-scale metrics are computed at that many events.")
+    argparser.add_argument("--target_topology_rates_file", type=str, required=True,
+                           help="Path to the json file mapping every topology of this sample to the summed "
+                                "PreWeight of its target events, as written by 'Init.py'.")
+    argparser.add_argument("--n_subsamples", type=int, required=True,
+                           help="Number of data-sized subsamples the data-scale SWD and p-value are averaged over.")
+    argparser.add_argument("--subsample_seed", type=int, required=True,
+                           help="Seed the data-sized subsamples are drawn from. It must be the one the baseline "
+                                "of this sample and topology was computed with, so that they are all evaluated on the same events.")
     argparser.add_argument("--output_file", type=str, required=True, help="The path to the csv file where the hyperparameters and metrics will be saved in addition to the tensorboard log file.")
     args = argparser.parse_args()
 
@@ -102,68 +113,28 @@ if __name__ == "__main__":
     testing_samples = {set_name: testing_samples[set_name] for set_name in param_set_dict}
 
     writer = SummaryWriter(args.logdir)
-    # The trained weights take the pre-weighted original distribution to the pre-weighted target one,
-    # so they are multiplied by the pre-weights of the events to give their absolute weights.
-    weight_dict = {
-        args.model: weights_test*testing_samples[REWEIGHTING_SET]["original_test"][1],
-    }
 
     with open(args.binning_file, 'r') as f:
         binning_dict = json.load(f)
 
-    # Normalisation closure on the test sample: the summed reweighted original over the summed target,
-    # 1 for a correctly normalised model. Every other metric normalises both samples to 1 and so is
-    # blind to it.
-    metrics["norm_test"] = np.sum(weight_dict[args.model]) / np.sum(testing_samples[REWEIGHTING_SET]["target_test"][1])
+    # The data-sized subsamples every metric prefixed 'data_' is computed on. Every parameter set is
+    # read from the same files with the same topology filter, so they share their events and one set
+    # of indices applies to all of them.
+    n_original = len(testing_samples[REWEIGHTING_SET]["original_test"][1])
+    n_target = len(testing_samples[REWEIGHTING_SET]["target_test"][1])
+    n_events = cap_data_n_events(data_n_events_of(args.data_n_events, args.target_topology_rates_file, args.topology),
+                                 min(n_original, n_target))
+    subsamples = data_subsample_indices(n_original, n_target, n_events, args.n_subsamples, args.subsample_seed)
 
-    for set_name, samples in testing_samples.items():
-        original, _ = samples["original_test"]
-        target, target_weight = samples["target_test"]
-
-        metrics[f"SWD_{set_name}"] = float("nan")
-        metrics[f"p_value_{set_name}"] = float("nan")
-        if set_name in swd_distributions:
-            swd_of_set = compute_swd(original, target, weight_dict,
-                                     target_weights=target_weight, n_directions=args.n_directions,
-                                     rng=swd_direction_rng(args.swd_seed, set_name))
-            p_value_of_set = compute_p_value(swd_of_set, np.load(swd_distributions[set_name]))
-            metrics[f"SWD_{set_name}"] = swd_of_set[args.model]
-            metrics[f"p_value_{set_name}"] = p_value_of_set[args.model]
-        else:
-            print(f"Warning: no bootstrapped SWD distribution given for the parameter set '{set_name}': "
-                  "its SWD and p-value are not computed.")
-
-        chi2_and_dof_of_set = chi2_dof(original, target, weight_dict,
-                                       binning_dict=binning_dict,
-                                       target_weights=target_weight,
-                                       list_param_interest=param_set_dict[set_name],
-                                       return_chi2_and_dof=True)
-        chi2, dof = chi2_and_dof_of_set[args.model]
-        metrics[f"chi2_dof_{set_name}"] = chi2/dof if dof > 0 else 0
-        metrics[f"chi2_p_value_{set_name}"] = chi2_p_value(chi2, dof)
-
-    # Chi2 of every analysis parameter taken on its own.
-    all_params_original, _ = testing_samples[ALL_PARAMS_SET]["original_test"]
-    all_params_target, all_params_target_weight = testing_samples[ALL_PARAMS_SET]["target_test"]
-    for param_index, param in enumerate(param_set_dict[ALL_PARAMS_SET]):
-        if param in binning_dict:
-            x_min = binning_dict[param]["x_min"]
-            x_max = binning_dict[param]["x_max"]
-            n_bins = binning_dict[param]["n_bins"]
-        else:
-            x_min = None
-            x_max = None
-            n_bins = 30
-        chi2, dof = chi2_hist_axis(all_params_original, all_params_target,
-                                   weight_dict[args.model], axis_number=param_index,
-                                   target_weights=all_params_target_weight,
-                                   n_bins=n_bins, x_min=x_min, x_max=x_max)
-        metrics[f"chi2_dof_{param}"] = chi2/dof if dof > 0 else 0
-        metrics[f"chi2_p_value_{param}"] = chi2_p_value(chi2, dof)
+    # The trained weights take the pre-weighted original distribution to the pre-weighted target one,
+    # so they are multiplied by the pre-weights of the events to give their absolute weights.
+    metrics.update(compute_all_metrics(testing_samples, weights_test*testing_samples[REWEIGHTING_SET]["original_test"][1],
+                                       param_set_dict, binning_dict, swd_distributions,
+                                       swd_seed=args.swd_seed, n_directions=args.n_directions,
+                                       n_events=n_events, subsamples=subsamples))
 
     for set_name in testing_samples:
-        if f"p_value_{set_name}" in metrics:
-            print(f"p_value_{set_name} : {metrics[f'p_value_{set_name}']}")
+        print(f"data_p_value_{set_name} : {metrics[f'data_p_value_{set_name}']}")
 
     # The un-reweighted baseline of this sample and topology, merged in before either output is
     # written so that the tensorboard HParams table and the metrics file both carry the model's

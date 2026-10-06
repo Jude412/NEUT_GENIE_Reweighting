@@ -9,6 +9,7 @@ on the plots are computed by 'Metrics_ndim.py', and the ones written to disk by 
 #imports
 import os
 
+from Constants import data_n_events_of
 from Plots_ndim import labels_of, plot_2D_histogram, plot_histograms, plot_training_history
 from Sample_io import load_sample, load_samples, sample_params
 from Train_predict import load_model, predict_model
@@ -83,9 +84,7 @@ if __name__ == "__main__":
 
         # Same plots, but with uncertainties scaled to the number of events the real downstream
         # analysis will actually use for this topology, rather than this much larger test sample.
-        with open(args.target_topology_rates_file) as f:
-            topology_rates = json.load(f)
-        n_events = args.data_n_events * topology_rates[args.topology] / sum(topology_rates.values())
+        n_events = data_n_events_of(args.data_n_events, args.target_topology_rates_file, args.topology)
         plot_histograms(original_test, target_test, weights_of(original_test_weight),
                         dict_binning=binning_dict,
                         original_weights=original_test_weight,

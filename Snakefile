@@ -26,6 +26,12 @@ DOWNSAMPLING = config["analysis"].get("downsampling")
 MAX_TRAINING_EVENTS = config["analysis"].get("max_training_events")
 
 RUNS = range(config["swd_bootstrapping"]["runs"])
+# Number of data-sized subsamples the data-scale SWD and p-value of every run are averaged over.
+N_SUBSAMPLES = config["data_scale"]["n_subsamples"]
+
+def data_n_events_for(wildcards):
+    """Return the total number of raw events the real downstream analysis will use for a sample."""
+    return DATA_N_EVENTS.get(wildcards.sample, DEFAULT_DATA_N_EVENTS)
 
 def training_seed(sample, topology):
     """Return the seed the training sample of a sample and topology is capped with."""
@@ -41,6 +47,14 @@ def swd_direction_seed(sample, topology):
     coinciding with 'training_seed'."""
 
     return int(hashlib.sha256(f"swd_directions/{sample}/{topology}".encode()).hexdigest()[:8], 16)
+
+def data_subsample_seed(sample, topology):
+    """Return the seed the data-sized subsamples of a sample and topology are drawn from.
+
+    As with 'swd_direction_seed', the baseline job and every 'compute_metrics' job of a sample and
+    topology are given this one seed, so that they are all evaluated on the same events."""
+
+    return int(hashlib.sha256(f"data_subsamples/{sample}/{topology}".encode()).hexdigest()[:8], 16)
 
 # Wall time (minutes) a 'train_model' job is given, per topology. It scales with the number of
 # events the topology holds, which the training cap only partly levels out: at
@@ -308,20 +322,23 @@ checkpoint initialize_analysis:
             --target_topology_rates_file {output.target_topology_rates} \
         """
 
-# Bootstraps swd_bootstrapping/n_samples samples from the target test sample, calculates 
-# the SWD between each sample and the target test sample, and saves the SWD distribution 
-# as a .npy file. This rule is run swd_bootstrapping/runs times for each sample/topology/
+# Bootstraps swd_bootstrapping/n_samples pairs of data-sized samples from the target test sample,
+# calculates the SWD between the two samples of each pair, and saves the SWD distribution
+# as a .npy file: the null distribution the data-scale p-values of the metric rules are read
+# against. This rule is run swd_bootstrapping/runs times for each sample/topology/
 # parameter set combination. These are marked as temp, since they are later aggregated into 
 # a single file.
 rule run_bootstrap:
     input:
-        target_test=BASE_SAMPLES_DIR + "target_test.parquet"
+        target_test=BASE_SAMPLES_DIR + "target_test.parquet",
+        target_topology_rates_file=TARGET_TOPOLOGY_RATES_FILE
     output:
         output_file=temp(INIT_SWD_DIR + "{param_set}/indiv_bootstrap/run_{run_id}.npy")
     params:
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set=lambda wc: PARAM_SET_DICT[wc.param_set],
-        n_bootstrap=config["swd_bootstrapping"]["n_samples"]
+        n_bootstrap=config["swd_bootstrapping"]["n_samples"],
+        data_n_events=data_n_events_for
     # group: "swd"
     threads: 1
     resources:
@@ -342,6 +359,8 @@ rule run_bootstrap:
             --output_file {output.output_file} \
             --n_bootstrap {params.n_bootstrap} \
             --n_directions {params.n_directions} \
+            --data_n_events {params.data_n_events} \
+            --target_topology_rates_file {input.target_topology_rates_file} \
             --random_seed {wildcards.run_id}
         """ 
 
@@ -430,7 +449,8 @@ rule compute_baseline_metrics:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
         swd_distributions=expand(swd_distribution_file("{param_set}"),
-                                 param_set=PARAM_SETS, allow_missing=True)
+                                 param_set=PARAM_SETS, allow_missing=True),
+        target_topology_rates_file=TARGET_TOPOLOGY_RATES_FILE
 
     params:
         sample_dir=BASE_SAMPLES_DIR,
@@ -438,6 +458,9 @@ rule compute_baseline_metrics:
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set_dict=json.dumps(PARAM_SET_DICT),
         swd_seed=lambda wc: swd_direction_seed(wc.sample, wc.topology),
+        subsample_seed=lambda wc: data_subsample_seed(wc.sample, wc.topology),
+        n_subsamples=N_SUBSAMPLES,
+        data_n_events=data_n_events_for,
         swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS))
 
     output:
@@ -468,6 +491,10 @@ rule compute_baseline_metrics:
             --param_set_dict '{params.param_set_dict}' \
             --binning_file {params.binning_file} \
             --swd_seed {params.swd_seed} \
+            --subsample_seed {params.subsample_seed} \
+            --n_subsamples {params.n_subsamples} \
+            --data_n_events {params.data_n_events} \
+            --target_topology_rates_file {input.target_topology_rates_file} \
             --output_file {output.baseline_metrics_file}
         """
 
@@ -479,7 +506,8 @@ rule compute_metrics:
         model_dir = MODEL_DIR,
         baseline_metrics=BASELINE_METRICS_FILE,
         swd_distributions=expand(swd_distribution_file("{param_set}"),
-                                 param_set=PARAM_SETS, allow_missing=True)
+                                 param_set=PARAM_SETS, allow_missing=True),
+        target_topology_rates_file=TARGET_TOPOLOGY_RATES_FILE
 
     params:
         sample_dir=BASE_SAMPLES_DIR,
@@ -490,6 +518,9 @@ rule compute_metrics:
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set_dict=json.dumps(PARAM_SET_DICT),
         swd_seed=lambda wc: swd_direction_seed(wc.sample, wc.topology),
+        subsample_seed=lambda wc: data_subsample_seed(wc.sample, wc.topology),
+        n_subsamples=N_SUBSAMPLES,
+        data_n_events=data_n_events_for,
         swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS))
 
     output:
@@ -530,6 +561,10 @@ rule compute_metrics:
             --binning_file {params.binning_file} \
             --baseline_metrics {input.baseline_metrics} \
             --swd_seed {params.swd_seed} \
+            --subsample_seed {params.subsample_seed} \
+            --n_subsamples {params.n_subsamples} \
+            --data_n_events {params.data_n_events} \
+            --target_topology_rates_file {input.target_topology_rates_file} \
             --output_file {output.metrics_file}
         """
 
@@ -594,7 +629,7 @@ rule make_plots:
         model_dir=FINAL_MODEL_DIR,
         model_list=MODELS,
         reweight_params=PARAM_SET_DICT[REWEIGHTING_SET],
-        data_n_events=lambda wc: DATA_N_EVENTS.get(wc.sample, DEFAULT_DATA_N_EVENTS)
+        data_n_events=data_n_events_for
 
     threads: 1
     resources:

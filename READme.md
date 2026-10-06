@@ -81,6 +81,12 @@ In the `swd_bootstrapping` section, you can specify
 - `n_samples`: the number of samples to draw per run (total number of bootstraps is `runs` x `n_samples`)
 - `n_directions`: the number of directions to sample in the parameter space to calculate the SWD
 
+In the `data_scale` section, you can specify
+- `n_subsamples`: the number of data-sized subsamples the data-scale SWD and p-value of every run are taken over
+
+The data scale of a sample is the number of raw events the real downstream analysis will use (`DATA_N_EVENTS` in
+`Constants.py`, `DEFAULT_DATA_N_EVENTS` otherwise), split across topologies by the summed PreWeight of their target events.
+
 In the `output` section, you can specify
 - `tag`: a string used by Snakemake to identify all saved outputs from this run
 
@@ -227,8 +233,9 @@ because the DAG depends on the number of topologies passing this check, which is
 This rule is run once for each sample.
 
 #### `rule run_bootstrap` (relies on outputs of initialize_analysis)
-Bootstraps `swd_bootstrapping/n_samples` samples from the target test sample, calculates the SWD between each sample and the
-target test sample, and saves the SWD distribution as a `.npy` file. This rule is run `swd_bootstrapping/runs` times for each
+Bootstraps `swd_bootstrapping/n_samples` pairs of data-sized samples from the target test sample, calculates the SWD
+between the two samples of each pair, and saves the SWD distribution as a `.npy` file: the null distribution the
+data-scale p-values are read against. This rule is run `swd_bootstrapping/runs` times for each
 sample/topology/parameter set combination. These are marked as `temp`, since they are later aggregated into a single file.
 
 #### `rule aggregate_bootstrap` (relies on outputs of run_bootstrap)
@@ -256,11 +263,18 @@ would otherwise repeat identically a few thousand times per topology.
 Computes the relevant metrics for a single trained model, and saves them to a `.csv` file. This is run once for each trained 
 model for each sample/topology combination. The metrics computed are:
 - SWD between the reweighted original and target test sample for the reweighting parameter set and each metric set
-- p-values for each of those SWDs
-- Total $\chi^2$/dof between the reweighted original and target test sample in each of the same parameter spaces
-- p-values for each of those $\chi^2$/dof values
-- 1D $\chi^2$/dof between the reweighted original and target test sample for every parameter included in the config
-- p-values for each of those 1D $\chi^2$/dof values
+  (`SWD_{set}`)
+- The mean SWD between `data_scale/n_subsamples` data-sized subsamples of the reweighted original and target test
+  samples (`data_SWD_{set}`), and the median of their p-values against the bootstrapped SWD distribution (`data_p_value_{set}`)
+- Total $\chi^2$/dof between the reweighted original and target test sample in each of the same parameter spaces,
+  and its p-value (`chi2_dof_{set}`, `chi2_p_value_{set}`)
+- 1D $\chi^2$/dof between the reweighted original and target test sample for every parameter included in the config,
+  and its p-value (`chi2_dof_{param}`, `chi2_p_value_{param}`)
+- The same $\chi^2$ metrics with their uncertainties scaled to the data scale, as in `1Dhist_data.pdf`
+  (`data_chi2_dof_...`, `data_chi2_p_value_...`)
+
+The data-sized subsamples are seeded from the sample and topology, so every hyperparameter set and the baseline
+are evaluated on the same events.
 
 These metrics are also reported between the original and target test samples themselves for comparison, under an
 `Original_` prefix. They are not computed here: they are read from the `baseline_metrics.csv` written by
