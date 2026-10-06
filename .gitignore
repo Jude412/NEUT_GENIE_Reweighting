@@ -14,6 +14,7 @@ set_hyperparameters/
 TensorBoard/
 saved_figures/
 scripts/
+configs/
 misc_figs/
 saved_metrics/
 live_figures.pdf

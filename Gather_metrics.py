@@ -12,12 +12,20 @@ the grid of a model is enough to change the hyperparameters that are scanned and
 
 # imports
 from List_hyperparameters import labelled_grid_of
-from Train_predict import model_extension
+from Train_predict import model_extension, FRACTIONAL_HYPERPARAMETERS
 import argparse
 import json
 import os
 import glob
 import pandas as pd
+
+def resolved_grid_point(grid_point):
+    """Return grid_point with every '..._frac' hyperparameter name replaced by the absolute name
+    'Compute_metrics.py' actually logs it under (see 'Train_predict.resolve_fractional_hyperparameters').
+
+    The metrics files hold the hyperparameters a run was actually trained with, so a fractional
+    hyperparameter of the grid file is looked up there by its absolute name."""
+    return {FRACTIONAL_HYPERPARAMETERS.get(name, name): reference for name, reference in grid_point.items()}
 
 def cast_like(value, reference):
     """Return a json-serialisable value cast to the type of the reference value of the grid.
@@ -101,7 +109,7 @@ if __name__ == "__main__":
             for hp_id in grid
         }
         hyperparameters, metrics, hp_id = best_hyperparameters(
-            metrics_files, next(iter(grid.values())), metric, direction
+            metrics_files, resolved_grid_point(next(iter(grid.values()))), metric, direction
         )
         best_hyperparameters_of_models[model] = {
             "hyperparameters": hyperparameters,
@@ -128,4 +136,3 @@ if __name__ == "__main__":
         os.makedirs(output_dir, exist_ok=True)
     with open(args.metrics_file, "w") as f:
         json.dump(best_hyperparameters_of_models, f, indent=0)
-

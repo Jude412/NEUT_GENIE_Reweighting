@@ -4,7 +4,7 @@
 
 # Imports 
 from ROOT_file_conv import convert_input_file, topology_code
-from Sample_io import split_sample, save_sample, TOPOLOGY_COLUMN
+from Sample_io import split_and_save_sample, TOPOLOGY_COLUMN, WEIGHT_COLUMN
 from Split_sizes import minimum_events
 import argparse
 import os
@@ -49,6 +49,10 @@ if __name__ == "__main__":
                                 "sub-directory named after it.",
                            default="saved_samples/default/")
     argparser.add_argument("--topologies_file", required=False, type=str, help="Path to the output json file containing the topology codes to include", default="saved_samples/default/included_topologies.json")
+    argparser.add_argument("--target_topology_rates_file", required=False, type=str,
+                           help="Path to the output json file containing the summed PreWeight of the target "
+                                "sample's events, per included topology.",
+                           default="saved_samples/default/target_topology_rates.json")
     args = argparser.parse_args()
     if args.modes == [None]:
         # 'nargs="+"' always returns a list, so a single 'None' collapses to the bare None
@@ -66,6 +70,10 @@ if __name__ == "__main__":
 
     orig_topology_counts = original[TOPOLOGY_COLUMN].value_counts().sort_index().to_dict()
     target_topology_counts = target[TOPOLOGY_COLUMN].value_counts().sort_index().to_dict()
+    # Summed PreWeight (physical rate) of the target sample's events, per topology: unlike
+    # 'target_topology_counts' above, this reflects how often each topology actually occurs rather
+    # than how many MC events happen to have been generated for it.
+    target_topology_rates = target.groupby(TOPOLOGY_COLUMN)[WEIGHT_COLUMN].sum().to_dict()
 
     min_events = minimum_events(args.train_percentage, args.val_percentage)
     topologies_to_include = []
@@ -86,17 +94,19 @@ if __name__ == "__main__":
     with open(args.topologies_file, 'w') as f:
         json.dump(topologies_to_include, f, indent=0)
 
+    # Write out the target rate of every included topology as a json file
+    os.makedirs(os.path.dirname(args.target_topology_rates_file), exist_ok=True)
+    with open(args.target_topology_rates_file, 'w') as f:
+        json.dump({top: target_topology_rates.get(topology_code(top), 0) for top in topologies_to_include}, f, indent=0)
+
     codes_to_include = [topology_code(top) for top in topologies_to_include]
 
-    orig_train, orig_val, orig_test = split_sample(original, args.train_percentage, args.val_percentage, codes_to_include, args.random_seeds[0])
-    target_train, target_val, target_test = split_sample(target, args.train_percentage, args.val_percentage, codes_to_include, args.random_seeds[1])
-
-    # Saving the samples
-    print(f"Saving the samples to {args.output_dir}...")
-    save_sample(orig_train, os.path.join(args.output_dir, "original_train.parquet"))
-    save_sample(orig_val, os.path.join(args.output_dir, "original_val.parquet"))
-    save_sample(orig_test, os.path.join(args.output_dir, "original_test.parquet"))
-    save_sample(target_train, os.path.join(args.output_dir, "target_train.parquet"))
-    save_sample(target_val, os.path.join(args.output_dir, "target_val.parquet"))
-    save_sample(target_test, os.path.join(args.output_dir, "target_test.parquet"))
+    # Splitting and saving the samples. The original distribution is released once it is saved, so
+    # that it is not still held in memory while the target one is split.
+    print(f"Splitting and saving the samples to {args.output_dir}...")
+    split_and_save_sample(original, args.train_percentage, args.val_percentage, codes_to_include, args.random_seeds[0],
+                          [os.path.join(args.output_dir, f"original_{split}.parquet") for split in ("train", "val", "test")])
+    del original
+    split_and_save_sample(target, args.train_percentage, args.val_percentage, codes_to_include, args.random_seeds[1],
+                          [os.path.join(args.output_dir, f"target_{split}.parquet") for split in ("train", "val", "test")])
     

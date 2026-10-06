@@ -9,11 +9,29 @@ since the normalization is already included in the computation of the metrics.""
 
 #Imports
 
+import hashlib
 import numpy as np
 import ot
 from scipy.stats import chi2 as chi2_dist
 
-def chi2_hist_axis(original, target, rw_weights, axis_number, target_weights = None, n_bins = 30, x_min=None, x_max=None):
+
+def swd_direction_rng(base_seed, param_set):
+    """Return the generator drawing the SWD projection directions of a set of parameters.
+
+    The SWD is a Monte-Carlo estimate over random projections, so two jobs drawing their own
+    directions disagree on it by a few percent even for identical inputs. Seeding it from the
+    sample and topology ('base_seed') makes the baseline job and every hyperparameter job of a
+    sample and topology project onto the same directions, so that the hyperparameter sets, and
+    the un-reweighted baseline they are read against, differ only by what the reweighting did
+    and not by the noise of the estimator. The name of the parameter set is mixed in so that two
+    sets holding the same number of parameters do not reuse a single draw.
+
+    'hashlib' rather than the builtin 'hash', which is salted per process and so would not give
+    the same seed in the baseline job as in the hyperparameter jobs."""
+    set_seed = int(hashlib.sha256(param_set.encode()).hexdigest()[:8], 16)
+    return np.random.default_rng([base_seed, set_seed])
+
+def chi2_hist_axis(original, target, rw_weights, axis_number, target_weights = None, n_bins = 30, x_min=None, x_max=None, n_events=None):
     if (x_min is not None) and (x_max is not None):
         bins = np.linspace(x_min, x_max, n_bins+1)
     else:
@@ -36,7 +54,14 @@ def chi2_hist_axis(original, target, rw_weights, axis_number, target_weights = N
     ## So, we have to sum the errors in quadrature, one with the sqrt of the target histogram, and the other with the sqrt of the sum of the 
     ## squared weights of our prediction in each bin.
     rw_weight_squared_sum = np.histogram(original[:, axis_number], bins=bins, weights=(rw_weights/np.sum(rw_weights))**2)[0]
-    sigma2 = target_weights_squared_sum + rw_weight_squared_sum
+
+    # Each term above is a variance that scales as 1/n_events (regardless of the events' weight
+    # magnitude, since it is computed from weights already normalised to sum to 1): scaling it by
+    # the actual number of events over a hypothetical smaller one reports the chi2 that hypothetical
+    # sample would give, rather than this (usually much larger) test sample's.
+    target_scale = len(target) / n_events if n_events is not None else 1.0
+    original_scale = len(original) / n_events if n_events is not None else 1.0
+    sigma2 = target_weights_squared_sum * target_scale + rw_weight_squared_sum * original_scale
     mask = sigma2 > 0
     chi2 = np.sum((hist_original_rw[mask] - hist_target[mask]) ** 2 / (sigma2[mask]))
     if np.sum(mask) >= 2:
@@ -80,11 +105,14 @@ def chi2_p_value(chi2, dof):
     p_value = 1 - chi2_dist.cdf(chi2, dof)
     return p_value
 
-def compute_swd(original, target, weights_dict, target_weights = None, n_directions=500):
+def compute_swd(original, target, weights_dict, target_weights = None, n_directions=500, rng=None):
     # We compute the Sliced Wasserstein Distance between the original and target distributions, using the weights for the original distribution.
     # We project the distributions on a given number of random vectors in the unitary sphere, and we compute the wasserstein distance for each projection,
     #then we average them.
-    v = np.random.normal(0, 1, size = (n_directions, original.shape[1]))
+    # 'rng' is the generator the directions are drawn from: pass the one 'swd_direction_rng'
+    # returns to compare distances across jobs, and leave it unset to draw fresh directions.
+    rng = np.random.default_rng() if rng is None else rng
+    v = rng.normal(0, 1, size = (n_directions, original.shape[1]))
     v /= np.linalg.norm(v, axis = 1)[:, np.newaxis]
 
     dict_swd = {key: [] for key in weights_dict.keys()}

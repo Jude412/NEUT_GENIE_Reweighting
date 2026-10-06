@@ -26,6 +26,12 @@ TOPOLOGY_CODES = {
     "Other": 10,
 }
 
+# Total number of raw events the real downstream analysis will use for a sample, overriding
+# DEFAULT_DATA_N_EVENTS. Used by 'Make_plots.py' to scale 'plot_histograms' uncertainties down to
+# that many events for '1Dhist_data.pdf', instead of the much larger test-sample statistics.
+DEFAULT_DATA_N_EVENTS = 1_000_000
+DATA_N_EVENTS = {}
+
 def topology_code(topology):
     """Return the integer code of a topology given either its name (ex: 'CC1pipm') or its code (ex: 1)."""
     if isinstance(topology, str):

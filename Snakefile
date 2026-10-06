@@ -7,8 +7,8 @@ import json
 import os
 import re
 
+from Constants import DATA_N_EVENTS, DEFAULT_DATA_N_EVENTS
 from List_hyperparameters import labels_of
-from Split_sizes import minimum_events
 from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET
 from Train_predict import model_extension
 
@@ -31,6 +31,47 @@ def training_seed(sample, topology):
     """Return the seed the training sample of a sample and topology is capped with."""
 
     return int(hashlib.sha256(f"{sample}/{topology}".encode()).hexdigest()[:8], 16)
+
+def swd_direction_seed(sample, topology):
+    """Return the seed the SWD projection directions of a sample and topology are drawn from.
+
+    The baseline job and every 'compute_metrics' job of a sample and topology are given this one
+    seed, so that they measure their distances along the same directions and the hyperparameter
+    sets can be compared without the noise of the estimator itself. Its own prefix keeps it from
+    coinciding with 'training_seed'."""
+
+    return int(hashlib.sha256(f"swd_directions/{sample}/{topology}".encode()).hexdigest()[:8], 16)
+
+# Wall time (minutes) a 'train_model' job is given, per topology. It scales with the number of
+# events the topology holds, which the training cap only partly levels out: at
+# 'max_training_events' of 2.5M, CC0pi loads ~9.4M events against ~1.1M for CCOther. The values
+# are the worst-case run-3 benchmarks (benchmarks/{tag}/{sample}/{topology}/train_model_XGB/,
+# ~25 minutes per million events loaded) scaled to the capped sample size, with margin
+#
+# full_params2 doubled 'n_estimators' to 10000. Extrapolating the full_params benchmarks linearly in
+# the number of trees, the worst cases at 10000 trees are CC0pi 485, CC1pipm 466, NC0pi 444 and
+# CCNpi 273 minutes. NC0pi already went over 180 minutes on 129 of its 300 full_params runs, which
+# only finished through the retry.
+TRAIN_RUNTIME = {
+    "CC0pi":   600,
+    "CC1pipm": 600,
+    "NC0pi":   600,
+    "CCNpi":   360,
+}
+DEFAULT_TRAIN_RUNTIME = 180
+
+# The grid only grants more than 4 GB to jobs that run for less than 3 hours, and the topologies
+# above all run for longer, so the memory request is a flat 4 GB rather than a per-topology one
+# that would leave them unmatched. It is not grown by the retry attempt either, for the same
+# reason: a retry asking for 8 GB over 3 hours would never be scheduled. The training cap is what
+# keeps the peak inside that ceiling (~2.9 GB for CC0pi, the largest, against a measured
+# 96 MB + 298 MB per million events loaded), so raising the cap means re-checking this.
+TRAIN_MEM_MB = 4000
+
+def train_model_runtime(wildcards, attempt):
+    """Return the wall time a train_model job is given, grown by the retry attempt as 'scaled'
+    does for the other rules."""
+    return TRAIN_RUNTIME.get(wildcards.topology, DEFAULT_TRAIN_RUNTIME) * attempt
 
 
 # ---------------------------------------------------------------------------
@@ -135,6 +176,11 @@ TENSORBOARD_RUN_DIR = TENSORBOARD_DIR + "{model}/{hp_id}/"
 BASE_BENCH_DIR   = f"benchmarks/{TAG}/{{sample}}/"
 BENCH_DIR   = BASE_BENCH_DIR + "{topology}/"
 
+# The un-reweighted baseline every run of a sample and topology is read against. It holds no
+# {model}/{hp_id}, so it is not reached by the per-run metrics 'Gather_metrics.py' and
+# 'Plot_hyperparameters.py' collect.
+BASELINE_METRICS_FILE = ALL_METRICS_DIR + "baseline_metrics.csv"
+
 # The bootstrapped SWD distribution of a set of parameters, whichever rule wrote its samples.
 def swd_distribution_file(param_set):
     return INIT_SWD_DIR + f"{param_set}/swd_distribution_{param_set}.npy"
@@ -175,6 +221,7 @@ wildcard_constraints:
     run_id=r"\d+"
 
 INCLUDED_TOPOLOGIES_FILE = f"saved_samples/{TAG}/{{sample}}/included_topologies.json"
+TARGET_TOPOLOGY_RATES_FILE = f"saved_samples/{TAG}/{{sample}}/target_topology_rates.json"
 
 def topologies_for_sample(sample):
     """Return the topologies of the config file that hold enough events in a given sample."""
@@ -192,9 +239,10 @@ def all_metrics_files(wildcards):
 
 def all_figure_dirs(wildcards):
     return [
-        f"saved_figures/{TAG}/{sample}/{topology}/1Dhist.pdf"
+        f"saved_figures/{TAG}/{sample}/{topology}/{name}"
         for sample in SAMPLES
         for topology in topologies_for_sample(sample)
+        for name in ("1Dhist.pdf", "1Dhist_data.pdf")
     ]
 
 localrules: prepare_hps, aggregate_bootstrap, choose_models
@@ -227,12 +275,13 @@ checkpoint initialize_analysis:
 
     output:
         last_sampled_files=directory(BASE_SAMPLES_DIR + "target_test.parquet"),
-        included_topologies=INCLUDED_TOPOLOGIES_FILE
+        included_topologies=INCLUDED_TOPOLOGIES_FILE,
+        target_topology_rates=TARGET_TOPOLOGY_RATES_FILE
 
     threads: 1
     resources:
-        mem_mb=4000,
-        runtime=scaled(180),
+        mem_mb=12000,
+        runtime=180,
         # disk_mb=10000
 
     benchmark:
@@ -256,6 +305,7 @@ checkpoint initialize_analysis:
             --downsampling {params.downsampling} \
             --output_dir {params.samples_dir} \
             --topologies_file {output.included_topologies} \
+            --target_topology_rates_file {output.target_topology_rates} \
         """
 
 # Bootstraps swd_bootstrapping/n_samples samples from the target test sample, calculates 
@@ -275,8 +325,8 @@ rule run_bootstrap:
     # group: "swd"
     threads: 1
     resources:
-        mem_mb=3000,
-        runtime=scaled(120),
+        mem_mb=4000,
+        runtime=scaled(180),
         # disk_mb=10000
     benchmark:
         BENCH_DIR + "bootstrap_swd_{param_set}/run_bootstrap_{run_id}.tsv"
@@ -351,8 +401,8 @@ rule train_model:
         model_dir=directory(MODEL_DIR)
     threads: 1
     resources:
-        mem_mb=4000,
-        runtime=scaled(180),
+        mem_mb=TRAIN_MEM_MB,
+        runtime=train_model_runtime,
         # disk_mb=10000
     benchmark:
         BENCH_DIR + f"train_model_{{model}}/train_model_{{model}}_hp_{{hp_id}}.tsv"
@@ -371,13 +421,63 @@ rule train_model:
             --seed {params.seed}
         """
 
+# Computes the metrics of the un-reweighted ('Original') baseline, which every trained model of a
+# sample and topology is read against, and saves them to a .csv file. They depend on neither the
+# model nor its hyperparameters, so this runs once per sample/topology combination instead of once
+# per hyperparameter set: it is about half the work of a 'compute_metrics' job, which the grid
+# would otherwise repeat identically a few thousand times.
+rule compute_baseline_metrics:
+    input:
+        last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
+        swd_distributions=expand(swd_distribution_file("{param_set}"),
+                                 param_set=PARAM_SETS, allow_missing=True)
+
+    params:
+        sample_dir=BASE_SAMPLES_DIR,
+        binning_file=config["parameters"]["binning_file"],
+        n_directions=config["swd_bootstrapping"]["n_directions"],
+        param_set_dict=json.dumps(PARAM_SET_DICT),
+        swd_seed=lambda wc: swd_direction_seed(wc.sample, wc.topology),
+        swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS))
+
+    output:
+        baseline_metrics_file=BASELINE_METRICS_FILE
+
+    threads: 1
+    # This job loads no model, so it sits at the sample-loading floor the 'compute_metrics'
+    # benchmarks measure (~2.8 GB). It is given the same wall time as a 'compute_metrics' job
+    # despite being expected to take about half of one: it blocks every hyperparameter set of its
+    # topology, so it is not the place to be tight.
+    resources:
+        mem_mb=4000,
+        runtime=scaled(180),
+
+    benchmark:
+        BENCH_DIR + "compute_baseline_metrics.tsv"
+
+    conda:
+        ENV
+
+    shell:
+        """
+        python Compute_baseline_metrics.py \
+            --sample_dir {params.sample_dir} \
+            --topology {wildcards.topology} \
+            {params.swd_distribution_flags} \
+            --n_directions {params.n_directions} \
+            --param_set_dict '{params.param_set_dict}' \
+            --binning_file {params.binning_file} \
+            --swd_seed {params.swd_seed} \
+            --output_file {output.baseline_metrics_file}
+        """
+
 # Computes the relevant metrics for a single trained model, and saves them to a .csv file. 
 # This is run once for each trained model for each sample/topology combination.
 rule compute_metrics:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
         model_dir = MODEL_DIR,
-        hparam_file=HPS_DIR + "{model}/{model}_hp_{hp_id}.json",
+        baseline_metrics=BASELINE_METRICS_FILE,
         swd_distributions=expand(swd_distribution_file("{param_set}"),
                                  param_set=PARAM_SETS, allow_missing=True)
 
@@ -389,6 +489,7 @@ rule compute_metrics:
         binning_file=config["parameters"]["binning_file"],
         n_directions=config["swd_bootstrapping"]["n_directions"],
         param_set_dict=json.dumps(PARAM_SET_DICT),
+        swd_seed=lambda wc: swd_direction_seed(wc.sample, wc.topology),
         swd_distribution_flags=named_paths_flags("--swd_distribution", swd_distributions_of(PARAM_SETS))
 
     output:
@@ -397,9 +498,16 @@ rule compute_metrics:
 
     # group: "tune"
     threads: 1
+
+    # 25 of the 3000 full_params jobs already peaked above 4 GB (up to 4.5 GB, CC0pi), and the
+    # depth-9 models at 10000 trees extrapolate to 4.2-4.8 GB. The grid only grants more than 4 GB
+    # to jobs under 3 hours, so the wall time is a flat 175 minutes rather than one grown by the
+    # retry attempt. The longest full_params job took 95 minutes (CC0pi); a linear fit in the number
+    # of trees puts CC0pi at ~75 minutes at 10000 trees, so that slowest job looks like an outlier
+    # rather than the trend.
     resources:
-        mem_mb=4000,
-        runtime=scaled(180),
+        mem_mb=6000,
+        runtime=175,
         # disk_mb=10000
 
     benchmark:
@@ -415,12 +523,13 @@ rule compute_metrics:
             --model {params.model} \
             --model_dir {input.model_dir} \
             --topology {wildcards.topology} \
-            --hyperparameters {input.hparam_file} \
             {params.swd_distribution_flags} \
             --logdir {params.logdir} \
             --n_directions {params.n_directions} \
             --param_set_dict '{params.param_set_dict}' \
             --binning_file {params.binning_file} \
+            --baseline_metrics {input.baseline_metrics} \
+            --swd_seed {params.swd_seed} \
             --output_file {output.metrics_file}
         """
 
@@ -471,10 +580,12 @@ rule choose_models:
 rule make_plots:
     input:
         last_sampled_file=BASE_SAMPLES_DIR + "target_test.parquet",
-        model_files=[model_file(model) for model in MODELS]
+        model_files=[model_file(model) for model in MODELS],
+        target_topology_rates_file=TARGET_TOPOLOGY_RATES_FILE
 
     output:
-        histograms_1D=FIG_DIR + "1Dhist.pdf"
+        histograms_1D=FIG_DIR + "1Dhist.pdf",
+        histograms_1D_data=FIG_DIR + "1Dhist_data.pdf"
 
     params:
         sample_dir=BASE_SAMPLES_DIR,
@@ -482,7 +593,8 @@ rule make_plots:
         output_dir=FIG_DIR,
         model_dir=FINAL_MODEL_DIR,
         model_list=MODELS,
-        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET]
+        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET],
+        data_n_events=lambda wc: DATA_N_EVENTS.get(wc.sample, DEFAULT_DATA_N_EVENTS)
 
     threads: 1
     resources:
@@ -507,7 +619,9 @@ rule make_plots:
             --output_dir {params.output_dir} \
             --make_1D_plots \
             --no-make_2D_plots \
-            --binning_file {params.binning_file}
+            --binning_file {params.binning_file} \
+            --data_n_events {params.data_n_events} \
+            --target_topology_rates_file {input.target_topology_rates_file}
         """
 
 # Carries out the entire workflow, by requesting the outputs of the initialize_analysis

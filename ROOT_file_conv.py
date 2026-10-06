@@ -29,7 +29,7 @@ def convert_input_file(input_file, input_tree, analysis_params, modes = None, do
     # Open the ROOT file
     file = uproot.open(input_file)
     tree_obj = cast(uproot.TTree, file[input_tree])
-entry_stop = (
+    entry_stop = (
         max(1, round(tree_obj.num_entries * downsampling))
         if downsampling is not None and tree_obj.num_entries > 0
         else None
@@ -79,6 +79,7 @@ def process_chunk(tree, input_file, analysis_params, modes) -> pd.DataFrame:
     #Multiplicity
     tree["N_n"]   = ak.sum(pdg == 2112, axis=1)
     tree["N_p"]   = ak.sum(pdg == 2212, axis=1)
+    tree["N_thresh_p"] = ak.sum((pdg == 2212) & (energy > np.sqrt(0.938**2 + 0.45**2)), axis=1) # 0.45 GeV/c is the threshold for a proton to be above Cherenkov threshold in water
     tree["N_pi0"] = ak.sum(pdg == 111, axis=1)
     tree["N_pim"] = ak.sum(pdg == -211, axis=1)
     tree["N_pip"] = ak.sum(pdg == 211, axis=1)
@@ -117,6 +118,7 @@ def process_chunk(tree, input_file, analysis_params, modes) -> pd.DataFrame:
     is_cc = tree["cc"]
     n_pi_charged = tree["N_pip"] + tree["N_pim"]
     n_pi_total = n_pi_charged + tree["N_pi0"]
+    tree["N_pi"] = n_pi_total
 
     topology_masks = {}
     for sign, cc_mask in [("CC", is_cc), ("NC", ~is_cc)]:
@@ -164,4 +166,23 @@ def process_chunk(tree, input_file, analysis_params, modes) -> pd.DataFrame:
     tree = tree[columns_to_write]
 
     data = cast(pd.DataFrame, ak.to_dataframe(tree))
+    return downcast_columns(data)
+
+def downcast_columns(data):
+    """Return data with its float columns cast to float32 and its integer columns to int16, except
+    for the weight column, which is kept at full precision since it is summed over millions of
+    events. This more than halves the memory the samples take up. No precision is lost for the
+    trainings, as XGBoost casts its inputs to float32 anyway. The dtypes are fixed rather than
+    picked from each chunk's values, so that every chunk and every topology of a sample is written
+    with the same schema."""
+    int16_range = np.iinfo(np.int16)
+    for column in data.columns:
+        if column == WEIGHT_COLUMN:
+            continue
+        if pd.api.types.is_float_dtype(data[column]):
+            data[column] = data[column].astype(np.float32)
+        elif pd.api.types.is_integer_dtype(data[column]):
+            if data[column].min() < int16_range.min or data[column].max() > int16_range.max:
+                raise ValueError(f"Column '{column}' holds values outside of the int16 range it is stored in.")
+            data[column] = data[column].astype(np.int16)
     return data

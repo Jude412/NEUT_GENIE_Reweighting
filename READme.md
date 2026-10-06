@@ -167,7 +167,8 @@ The outputs of the analysis are saved in the following directories:
 - `saved_swd_distribution/{tag}/{sample}/{topology}/{param_set}/`: the null SWD distribution for the target test
   sample in the parameter space defined by `param_set`, saved as `.npy` files
 - `saved_metrics/{tag}/{sample}/{topology}/`: the metrics and hyperparameters for the best trained models for each
-  topology and model type, saved as a `.json` file.
+  topology and model type, saved as a `.json` file, and the metrics of the un-reweighted baseline every model of
+  that topology is read against (`baseline_metrics.csv`).
 - `saved_metrics/{tag}/{sample}/{topology}/{model}/{hp_id}/`: the metrics and hyperparameters for all the trained
   models for each topology and model type, saved as a `.csv` file.
 
@@ -223,7 +224,15 @@ Trains and saves a single model with a single hyperparameter set. This rule is r
 model, for each sample/topology combination. The trained model is saved as a `.json` file for XGB and unnormXGB, and as a 
 `.pkl` file for binned reweighting.
 
-#### `rule compute_metrics` (relies on outputs of initialize_analysis, train_model and aggregate_bootstrap)
+#### `rule compute_baseline_metrics` (relies on outputs of initialize_analysis and aggregate_bootstrap)
+Computes the metrics of the un-reweighted ("Original") baseline, which every trained model of a sample and topology is
+read against, and saves them to a `.csv` file. They are the same quantities `compute_metrics` reports for a model,
+taken without any reweighting, and so depend on neither the model nor its hyperparameters: this rule is run once per
+sample/topology combination rather than once per hyperparameter set, and `compute_metrics` merges its columns into
+each run's own metrics file. It is roughly half the work of a `compute_metrics` job, which the hyperparameter grid
+would otherwise repeat identically a few thousand times per topology.
+
+#### `rule compute_metrics` (relies on outputs of initialize_analysis, train_model, aggregate_bootstrap and compute_baseline_metrics)
 Computes the relevant metrics for a single trained model, and saves them to a `.csv` file. This is run once for each trained 
 model for each sample/topology combination. The metrics computed are:
 - SWD between the reweighted original and target test sample for the reweighting parameter set and each metric set
@@ -233,7 +242,14 @@ model for each sample/topology combination. The metrics computed are:
 - 1D $\chi^2$/dof between the reweighted original and target test sample for every parameter included in the config
 - p-values for each of those 1D $\chi^2$/dof values
 
-These metrics are also computed between the original and target test samples themselves for comparison.
+These metrics are also reported between the original and target test samples themselves for comparison, under an
+`Original_` prefix. They are not computed here: they are read from the `baseline_metrics.csv` written by
+`compute_baseline_metrics` and merged in, so that every run still reports one consistent set of metric columns.
+
+The sliced Wasserstein distances are estimated from random projections, and those directions are seeded from the
+sample and topology. Every hyperparameter set of a topology, and the baseline they are read against, are therefore
+measured along the same directions, so that they differ by what the reweighting did rather than by the noise of the
+estimator.
 
 #### `rule choose_models` (relies on outputs of compute_metrics)
 Local rule that finds the best-performing model for every model in a given sample/topology, according to the metric specified 

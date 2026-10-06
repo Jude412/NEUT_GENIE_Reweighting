@@ -32,6 +32,13 @@ if __name__ == "__main__":
                            help='Whether to plot the training history of the models carrying one or not.')
     argparser.add_argument("--binning_file", type=str, required=True,
                            help="Path to the json file containing the binning information for each parameter.")
+    argparser.add_argument("--data_n_events", type=float, required=True,
+                           help="Total number of raw events the real downstream analysis will use for this "
+                                "sample, split across topologies by '--target_topology_rates_file'. Used to "
+                                "scale the uncertainties of '1Dhist_data.pdf' down from the test sample's.")
+    argparser.add_argument("--target_topology_rates_file", type=str, required=True,
+                           help="Path to the json file mapping every topology of this sample to the summed "
+                                "PreWeight of its target events, as written by 'Init.py'.")
     args = argparser.parse_args()
 
     with open(args.binning_file, 'r') as f:
@@ -73,6 +80,20 @@ if __name__ == "__main__":
                         xlabels=labels_of(params),
                         variables=params,
                         output_file=os.path.join(args.output_dir, "1Dhist.pdf"))
+
+        # Same plots, but with uncertainties scaled to the number of events the real downstream
+        # analysis will actually use for this topology, rather than this much larger test sample.
+        with open(args.target_topology_rates_file) as f:
+            topology_rates = json.load(f)
+        n_events = args.data_n_events * topology_rates[args.topology] / sum(topology_rates.values())
+        plot_histograms(original_test, target_test, weights_of(original_test_weight),
+                        dict_binning=binning_dict,
+                        original_weights=original_test_weight,
+                        target_weights=target_test_weight,
+                        xlabels=labels_of(params),
+                        variables=params,
+                        n_events=n_events,
+                        output_file=os.path.join(args.output_dir, "1Dhist_data.pdf"))
 
     if args.make_2D_plots:
         plot_2D_histogram(original_test, target_test, weights_of(original_test_weight),
