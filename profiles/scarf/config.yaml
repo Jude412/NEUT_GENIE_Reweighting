@@ -1,0 +1,28 @@
+# Snakemake profile for the SCARF Slurm cluster. Run from the repository root with
+#   snakemake all --profile profiles/scarf
+executor: slurm
+
+# SCARF-specific input paths, merged over config.yaml.
+configfiles:
+  - config_scarf.yaml
+
+# Maximum number of jobs queued or running at once. The whole cluster holds at most 20000 jobs
+# (MaxJobCount), shared between every user.
+jobs: 10000
+
+# Rules without explicit resources fall back to these. Runtimes are in minutes.
+default-resources:
+  slurm_account: ppd
+  slurm_partition: scarf
+  mem_mb: 4000
+  runtime: 180
+
+# Failed jobs are resubmitted, with the runtime of the rules using scaled() growing each attempt.
+retries: 2
+
+# Outputs written on a compute node can take a while to appear on the login node over panfs.
+latency-wait: 120
+
+rerun-incomplete: true
+keep-going: true
+printshellcmds: true

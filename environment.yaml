@@ -15,6 +15,7 @@ dependencies:
     - awkward
     - snakemake>=8
     - snakemake-executor-plugin-cluster-generic
+    - snakemake-executor-plugin-slurm
     - python-htcondor
     - xgboost
     - pot
