@@ -10,15 +10,47 @@ from hep_ml import reweight
 from xgboost import XGBClassifier
 
 # The reweighting models that can be trained, with the hyperparameters they are trained with when
-# none are given.
+# none are given. 'gamma_frac' is the fractional equivalent of the absolute 'gamma' this default used
+# to hold (2), at the ~1.6M total training weight it was tuned against: see
+# 'resolve_fractional_hyperparameters' for why XGB hyperparameters are given as fractions.
 DEFAULT_HYPERPARAMETERS = {
     "binning": {"n_bins": 12, "n_neighs": 0},
-    "XGB": {"n_estimators": 100, "learning_rate": 0.05, "max_depth": 3, "gamma": 2,
+    "XGB": {"n_estimators": 100, "learning_rate": 0.05, "max_depth": 3, "gamma_frac": 1.26e-06,
             "subsample": 0.3, "early_stopping_rounds": 10},
-    "unnormXGB": {"n_estimators": 100, "learning_rate": 0.05, "max_depth": 3, "gamma": 2,
+    "unnormXGB": {"n_estimators": 100, "learning_rate": 0.05, "max_depth": 3, "gamma_frac": 1.26e-06,
             "subsample": 0.3, "early_stopping_rounds": 10},
 }
 MODEL_NAMES = tuple(DEFAULT_HYPERPARAMETERS)
+
+# Maps a fractional hyperparameter's name to the absolute XGBoost hyperparameter it stands for.
+FRACTIONAL_HYPERPARAMETERS = {
+    "min_child_weight_frac": "min_child_weight",
+    "gamma_frac": "gamma",
+    "lambda_frac": "lambda",
+    "alpha_frac": "alpha",
+}
+
+def resolve_fractional_hyperparameters(hparams, total_weight):
+    """Return a copy of hparams with every '..._frac' hyperparameter converted to its absolute
+    XGBoost equivalent, by multiplying it by 'total_weight'.
+
+    'min_child_weight', 'gamma', 'lambda' and 'alpha' are compared by XGBoost against absolute
+    weighted gradient/Hessian sums over a leaf, which scale with the number of training events
+    when weights are of order 1 (as they are made to be below). Tuning them as fractions of the
+    total training weight instead keeps a hyperparameter grid meaningful across samples of
+    different size: 'total_weight' should be the sum of the sample weights actually passed to
+    'XGBClassifier.fit', i.e. after that rescaling. A hyperparameter given directly by its
+    absolute name (ex: 'gamma') is left untouched and takes precedence in xgboost, so both names
+    for the same hyperparameter may not be given together."""
+    hparams = dict(hparams)
+    for frac_name, abs_name in FRACTIONAL_HYPERPARAMETERS.items():
+        if frac_name not in hparams:
+            continue
+        if abs_name in hparams:
+            raise ValueError(f"Both '{frac_name}' and '{abs_name}' were given in the same "
+                             f"hyperparameter set: please give only one of them.")
+        hparams[abs_name] = hparams.pop(frac_name) * total_weight
+    return hparams
 
 def train_binning(original_train, target_train, n_bins, n_neighbours, original_train_weight=None, target_train_weight=None):
     """This function trains the binning reweighter given as arguments the training data, the number of bins
@@ -89,6 +121,8 @@ def train_XGB(original_train, original_val, target_train, target_val,
     w_train /= weight_scale
     w_val /= weight_scale
 
+    hparams = resolve_fractional_hyperparameters(hparams, w_train.sum())
+
     bst = XGBClassifier(objective='binary:logistic',
                     eval_metric=['auc', 'logloss'],
                     **hparams)
@@ -101,7 +135,15 @@ def train_XGB(original_train, original_val, target_train, target_val,
         verbose=False
     )
 
-    bst.norm_ratio = norm_ratio_train
+    # The normalisation is fitted after the shape, as for 'train_binning', rather than taken as
+    # norm_ratio_train. The mean shape weight p/(1-p) over the original sample is only 1 for a
+    # converged classifier: one stopped short of it predicts log density ratios shrunk towards 0,
+    # whose exponential averages to less than 1 (Jensen), so the reweighted sample came out low
+    # (by 11% for NC0pi in full_params). The validation sample is used, as a model overfitting the
+    # training sample is biased on it (CCOther in full_params closed at 0.85 on train, 1.01 on test).
+    shape_weights_val = predict_odds(original_val, bst)
+    bst.norm_ratio = target_val_weight.sum() / np.sum(original_val_weight * shape_weights_val)
+    bst.resolved_hyperparameters = hparams
     return bst
 
 def best_iteration_of(model):
@@ -114,11 +156,16 @@ def best_iteration_of(model):
         best_iteration = model.get_booster().num_boosted_rounds() - 1
     return best_iteration
 
-def predict_XGB(original, model):
-    """This function uses the trained model to return the weights used for the reweighting process."""
+def predict_odds(original, model):
+    """Return the odds p/(1-p) a trained XGBoost classifier gives the events of a distribution, taken
+    at its best iteration."""
     predictions = model.predict_proba(original, iteration_range=(0, best_iteration_of(model) + 1))
     p = np.clip(predictions[:, 1], 1e-7, 1 - 1e-7)
-    shape_weights = p / (1 - p) # Weights for shape matching
+    return p / (1 - p)
+
+def predict_XGB(original, model):
+    """This function uses the trained model to return the weights used for the reweighting process."""
+    shape_weights = predict_odds(original, model) # Weights for shape matching
     weights = shape_weights * model.norm_ratio # Weights for shape and normalization matching
     return weights
 
@@ -159,6 +206,8 @@ def train_unnormXGB(original_train, original_val, target_train, target_val,
     w_train /= weight_scale
     w_val /= weight_scale
 
+    hparams = resolve_fractional_hyperparameters(hparams, w_train.sum())
+
     bst = XGBClassifier(objective='binary:logistic',
                     eval_metric=['auc', 'logloss'],
                     **hparams)
@@ -171,14 +220,12 @@ def train_unnormXGB(original_train, original_val, target_train, target_val,
         verbose=False
     )
 
+    bst.resolved_hyperparameters = hparams
     return bst
 
 def predict_unnormXGB(original, model):
     """This function uses the trained model to return the weights used for the reweighting process."""
-    predictions = model.predict_proba(original, iteration_range=(0, best_iteration_of(model) + 1))
-    p = np.clip(predictions[:, 1], 1e-7, 1 - 1e-7)
-    weights = p / (1 - p) # Weights for shape and norm matching
-    return weights
+    return predict_odds(original, model) # Weights for shape and norm matching
 
 def check_model(model_name):
     """Raise if the given model is not one of the models that can be trained."""
@@ -207,7 +254,10 @@ def hyperparameters_of(model_name, hyperparameters_file=None):
 def train_model(model_name, samples, hyperparameters):
     """Train a model on the samples loaded by 'Sample_io.load_samples'.
 
-    The dispatch between the models lives here, so that every script trains them the same way."""
+    The dispatch between the models lives here, so that every script trains them the same way.
+    Returns the trained model and the hyperparameters it was actually trained with: identical to
+    'hyperparameters' for 'binning', but with every '..._frac' hyperparameter resolved to its
+    absolute value for 'XGB' and 'unnormXGB' (see 'resolve_fractional_hyperparameters')."""
     check_model(model_name)
 
     # extract numpy arrays from the dataframes, and the pre-weights of the events
@@ -217,19 +267,22 @@ def train_model(model_name, samples, hyperparameters):
     target_val, target_val_weight = samples["target_val"]
 
     if model_name == "binning":
-        return train_binning(original_train, target_train,
+        model = train_binning(original_train, target_train,
                              hyperparameters["n_bins"], hyperparameters["n_neighs"],
                              original_train_weight=original_train_weight,
                              target_train_weight=target_train_weight)
+        return model, dict(hyperparameters)
 
     elif model_name == "XGB":
-        return train_XGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
+        model = train_XGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
                          original_train_weight=original_train_weight, original_val_weight=original_val_weight,
                          target_train_weight=target_train_weight, target_val_weight=target_val_weight)
+        return model, model.resolved_hyperparameters
 
-    return train_unnormXGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
+    model = train_unnormXGB(original_train, original_val, target_train, target_val, hparams=hyperparameters,
                            original_train_weight=original_train_weight, original_val_weight=original_val_weight,
                            target_train_weight=target_train_weight, target_val_weight=target_val_weight)
+    return model, model.resolved_hyperparameters
 
 def predict_model(model_name, model, original):
     """Return the weights a trained model gives to a distribution.

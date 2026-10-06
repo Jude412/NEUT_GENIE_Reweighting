@@ -20,7 +20,9 @@ SAMPLE_NAMES = ("original_train", "original_val", "original_test",
 
 def save_sample(sample, sample_file):
     os.makedirs(os.path.dirname(sample_file), exist_ok=True)
-    table = pa.Table.from_pandas(sample)
+    # The index is not written: the samples are split from a shuffled dataframe, whose index would
+    # otherwise be stored as an extra '__index_level_0__' column and read back as a parameter.
+    table = pa.Table.from_pandas(sample, preserve_index=False)
     pq.write_to_dataset(table,
                         root_path=sample_file,
                         partition_cols=[TOPOLOGY_COLUMN],
@@ -53,11 +55,15 @@ def load_sample(sample_file, topology=None, params=None):
                              columns=columns_to_read,
                              filters=[(TOPOLOGY_COLUMN, "==", topology_code(topology))]))
 
-def split_sample(sample, train_percentage, val_percentage, included_topologies, random_seed):
-    """Split a distribution into its samples, given the indices of the events of each of them.
+def split_and_save_sample(sample, train_percentage, val_percentage, included_topologies, random_seed, sample_files):
+    """Split a distribution into its training, validation and test samples, and save them to the
+    three parquet datasets of sample_files (train, val, test).
 
-    Returns three dataframes: train_df, val_df, test_df"""
-    train_parts, val_parts, test_parts = [], [], []
+    The samples are split and written one topology at a time, each topology being appended to the
+    datasets as its own partition, rather than concatenated into three dataframes covering every
+    topology and then written: only one topology's samples are then held in memory at a time,
+    instead of copies of the whole distribution."""
+    train_file, val_file, test_file = sample_files
     rng = np.random.default_rng(random_seed)
     
     for topology, group in sample.groupby(TOPOLOGY_COLUMN):
@@ -76,15 +82,9 @@ def split_sample(sample, train_percentage, val_percentage, included_topologies, 
             f"Topology {topology} has too few events ({n}) to be split into training, validation and test samples with the requested percentages "
         )
 
-        train_parts.append(group.iloc[:n_train])
-        val_parts.append(group.iloc[n_train:n_train + n_val])
-        test_parts.append(group.iloc[n_train + n_val:])
-
-    train_df = pd.concat(train_parts, ignore_index=True)
-    val_df = pd.concat(val_parts, ignore_index=True)
-    test_df = pd.concat(test_parts, ignore_index=True)
-
-    return train_df, val_df, test_df
+        save_sample(group.iloc[:n_train], train_file)
+        save_sample(group.iloc[n_train:n_train + n_val], val_file)
+        save_sample(group.iloc[n_train + n_val:], test_file)
 
 def load_samples(sample_dir, topology=None, params=None, sample_names=SAMPLE_NAMES):
     """Load every sample of a directory and return the {sample name: (events, weights)} dictionary."""

@@ -53,15 +53,33 @@ def labels_of(params):
     """Return the labels of the given analysis parameters, defaulting to their own name."""
     return [PARAMETER_LABELS.get(param, param) for param in params]
 
-def plot_histograms(original, target, weights_dict, dict_binning, original_weights = None, target_weights = None, 
+def use_latex_default_font():
+    """Switch matplotlib's font to LaTeX's default (Computer Modern), overriding the one 'mh.style.use'
+    sets. This only changes matplotlib's own font choice, not 'text.usetex': it stays fast and does not
+    need a LaTeX installation."""
+    plt.rcParams.update({"font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm"})
+
+def plot_histograms(original, target, weights_dict, dict_binning, original_weights = None, target_weights = None,
                     xlabels = ["E_nu(GeV)", "E_lepton(GeV)", "cos_theta_lepton"],
                     variables = ["E_nu", "E_lepton", "cos_theta_lepton"],
-                    add_wass_distance = True, add_chi2 = True, output_file = "/vols/dune/jmm224/t2knova/reweighting/saved_figures/live.pdf"):
+                    add_wass_distance = True, add_chi2 = True, n_events = None,
+                    output_file = "/vols/dune/jmm224/t2knova/reweighting/saved_figures/live.pdf"):
     """This function plots the original, reweighted and target distributions for each variable, with a ratio plot of the reweighted
-      distribution over the target distribution. The weights_dict is a dictionary containing the predicted weights for each method, 
-      with the method name as key and the weights as value."""
+      distribution over the target distribution. The weights_dict is a dictionary containing the predicted weights for each method,
+      with the method name as key and the weights as value.
+
+      'n_events' rescales the statistical uncertainties (and so the chi2/dof) as if 'original' and 'target' each
+      held that many events instead of their actual number: as with 'chi2_hist_axis', it is None by default,
+      which leaves the uncertainties at their actual (usually much smaller) statistical scale."""
     mh.style.use("DUNE")
+    use_latex_default_font()
     target_norm = np.sum(target_weights) if target_weights is not None else len(target)
+    # Each of the uncertainties below is a variance that scales as 1/n_events (see 'chi2_hist_axis'
+    # for why this holds regardless of the events' weight magnitude): scaling it by the actual
+    # number of events over a hypothetical smaller one reports the uncertainty that hypothetical
+    # sample would give, rather than this (usually much larger) test sample's.
+    target_scale = len(target) / n_events if n_events is not None else 1.0
+    original_scale = len(original) / n_events if n_events is not None else 1.0
     with PdfPages(f"{output_file}") as pdf:
         for var in variables:
             #For the sake of the plots in this function, we use a given binning for each variable, specified in the dict_binning.
@@ -102,7 +120,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                 original_counts = np.histogram(original[:, i], bins=bins, weights = np.ones_like(original[:, i])/len(original))[0]
                 orig_counts_uncert = np.histogram(original[:, i], bins=bins, weights= (np.ones_like(original[:, i])/len(original))**2)[0]
 
-            target_uncertainty = np.sqrt(target_counts_uncert)
+            target_uncertainty = np.sqrt(target_counts_uncert * target_scale)
             orig_uncertainty = np.sqrt(orig_counts_uncert)
 
             # Getting the distribution for the reweighted original distributions, and its uncertainty (propagated from the weights uncertainty)
@@ -114,7 +132,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                 key = list(weights_dict.keys())[k]
                 original_rw_counts, _ = np.histogram(original[:, i], bins=bins, weights= weights_dict[key]/target_norm)
                 original_rw_counts_uncert = np.histogram(original[:, i], bins=bins, weights= (weights_dict[key]/target_norm)**2)[0]
-                original_rw_uncertainty = np.sqrt(original_rw_counts_uncert)
+                original_rw_uncertainty = np.sqrt(original_rw_counts_uncert * original_scale)
                 original_rw_counts_list.append(original_rw_counts)
                 original_rw_counts_uncert_list.append(original_rw_uncertainty)
 
@@ -140,7 +158,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
 
             if add_chi2:
                 for key in weights_dict.keys():
-                    chi2, dof = chi2_hist_axis(original, target, weights_dict[key], i, target_weights, n_bins=n_bins, x_min=x_min, x_max=x_max)
+                    chi2, dof = chi2_hist_axis(original, target, weights_dict[key], i, target_weights, n_bins=n_bins, x_min=x_min, x_max=x_max, n_events=n_events)
                     chi2_values[key] = chi2/dof if dof > 0 else 0
                     norm_ratio_values[key] = np.sum(weights_dict[key]) / target_norm
 
@@ -182,7 +200,7 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
                 # Plot ratio points with reweighting uncertainty
                 ax_ratio.step(bins, np.r_[ratio, ratio[-1]],
                               where = 'post', 
-                              markersize = 0.3, 
+                              markersize = 0.1, 
                               marker = markers_list[k], 
                               color = colors[f'{list(weights_dict.keys())[k]}'])
                 ax_ratio.errorbar(bin_centers, ratio, yerr=ratio_rw_err, fmt=markers_list[k], capsize=3, color = colors[f'{list(weights_dict.keys())[k]}'])
@@ -213,11 +231,39 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
             pdf.savefig(fig)
             plt.close(fig)
 
+        # Plot weight distribution for each method
+        if original_weights is not None:
+            # The weight each method predicted on its own, without the pre-weight of the events.
+            # 'Original' isn't a method's prediction, so dividing it by itself would only give a
+            # trivial spike at 1.
+            bdt_weights_dict = {key: weights / original_weights for key, weights in weights_dict.items()
+                                if key != "Original"}
+
+            fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
+
+            # Bins shared by every method, so their distributions are directly comparable. The upper
+            # edge is a percentile rather than the max, so that the handful of largest weights a
+            # density-ratio method can produce don't crush every other bin flat.
+            all_weights = np.concatenate(list(bdt_weights_dict.values()))
+            bins = np.linspace(np.min(all_weights), np.percentile(all_weights, 99.5), 51)
+
+            for key, weights in bdt_weights_dict.items():
+                ax.hist(weights, bins=bins, histtype='step', linewidth=1.5,
+                       color=colors.get(key), label=key[0].upper() + key[1:])
+
+            ax.set_xlabel("BDT weight", fontsize=22)
+            ax.set_ylabel("Events", fontsize=22)
+            ax.set_yscale("log")
+            ax.legend(fontsize=12)
+            pdf.savefig(fig)
+            plt.close(fig)
+
     return None
 
 def plot_2D_histogram(original, target, weights_dict, target_weights = None, xlabels = ["E_nu(GeV)", "E_lepton(GeV)", "Cos Theta_l"], 
                       nbins = 30, pull = False, output_file = "/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios_2D.pdf"):
     mh.style.use("DUNE")
+    use_latex_default_font()
     combinations = np.array(np.meshgrid(range(len(xlabels)), range(len(xlabels)))).T.reshape(-1, 2)
     target_norm = np.sum(target_weights) if target_weights is not None else len(target)
     with PdfPages(f"{output_file}") as pdf:
@@ -322,6 +368,7 @@ def plot_training_history(model, output_file, title="Training history"):
         print(f"Warning: the model has no training history: {output_file} is not written.")
         return False
 
+    use_latex_default_font()
     training_history = model.evals_result()
     with PdfPages(output_file) as pdf:
         fig, ax = plt.subplots(constrained_layout=True)

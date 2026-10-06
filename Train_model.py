@@ -5,6 +5,7 @@ from Sample_io import load_samples
 from Train_predict import hyperparameters_of, predict_model, train_model, save_model
 import os
 import argparse
+import json
 import numpy as np
 
 def int_or_none(value):
@@ -77,8 +78,17 @@ if __name__ == "__main__":
 
     # Train the model
     hyperparams = hyperparameters_of(args.model, args.hyperparameters)
-    model = train_model(args.model, training_samples, hyperparams)
+    model, resolved_hyperparams = train_model(args.model, training_samples, hyperparams)
     os.makedirs(args.output_dir, exist_ok=True)
     model_path = os.path.join(args.output_dir, f"{args.model}")
     save_model(args.model, model, model_path)
+
+    # Written alongside the model rather than stored on it, so that 'Compute_metrics.py' can log the
+    # absolute hyperparameters the model was actually trained with (a '..._frac' hyperparameter is
+    # resolved to a value that depends on the training sample's size, see
+    # 'Train_predict.resolve_fractional_hyperparameters') without needing to reload or retrain it.
+    resolved_hyperparams_path = os.path.join(args.output_dir, f"{args.model}_resolved_hyperparameters.json")
+    with open(resolved_hyperparams_path, "w") as f:
+        json.dump(resolved_hyperparams, f)
+
     print(f"{args.model} model saved at {model_path}")

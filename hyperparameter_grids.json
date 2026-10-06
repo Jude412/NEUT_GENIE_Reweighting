@@ -1,28 +1,28 @@
 {
   "binning": {
-    "n_bins": [5, 6, 7, 8, 9, 10, 11, 12],
+    "n_bins": [6, 8, 10, 12, 14, 16, 18, 20],
     "n_neighs": [0, 1, 2]
   },
   "XGB": {
-    "n_estimators": [5000],
-    "learning_rate": [0.01, 0.05, 0.1, 0.2],
-    "max_depth": [3, 5, 7, 9],
-    "subsample": [1.0, 0.8],
-    "gamma": [0, 0.5],
-    "min_child_weight": [1, 10],
-    "lambda": [1],
-    "alpha": [0],
+    "n_estimators": [10000],
+    "learning_rate": [0.05, 0.1, 0.2, 0.3],
+    "max_depth": [3, 6, 9],
+    "subsample": [1],
+    "gamma_frac": [0], 
+    "min_child_weight_frac": [6e-07],
+    "lambda_frac": [1.0e-4, 6.0e-04, 6.0e-03, 6.0e-02, 1.0e-01],
+    "alpha_frac": [0, 1.2e-5, 6e-6, 6.0e-05, 6.0e-04],
     "early_stopping_rounds": [50]
   },
   "unnormXGB": {
-    "n_estimators": [50000],
-    "learning_rate": [0.01, 0.05, 0.1, 0.2],
-    "max_depth": [3, 5, 7, 9],
-    "subsample": [0.8],
-    "gamma": [0, 0.5],
-    "min_child_weight": [1, 5],
-    "lambda": [1],
-    "alpha": [0],
+    "n_estimators": [5000],
+    "learning_rate": [0.01, 0.05, 0.2],
+    "max_depth": [3, 5, 7],
+    "subsample": [1],
+    "gamma_frac": [6.0e-06, 3.0e-05, 1.5e-04],
+    "min_child_weight_frac": [6e-07],
+    "lambda_frac": [6.0e-04, 6.0e-03, 6.0e-02, 3.0e-01],
+    "alpha_frac": [6.0e-05, 6.0e-04, 3.0e-03],
     "early_stopping_rounds": [50]
   }
 }
