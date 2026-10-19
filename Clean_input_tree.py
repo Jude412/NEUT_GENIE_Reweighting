@@ -125,6 +125,8 @@ def main():
 
     branch_count = 0
     for branch_src in find_branch_dirs(src_root, args.keep_dir, args.require_dir):
+        if "/CH2/" in branch_src.absolute().as_posix():
+            continue
         print(f"Branch: {branch_src}")
         process_branch(branch_src, src_root, dst_root, args.keep_dir, args.dry_run)
         branch_count += 1

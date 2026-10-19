@@ -1,0 +1,9 @@
+{
+  "*": {
+    "*": {
+      "XGB": [
+        {"learning_rate": 0.01, "max_depth": 9, "lambda_frac": [0.1, 0.3]}
+      ]
+    }
+  }
+}

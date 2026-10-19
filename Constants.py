@@ -32,7 +32,7 @@ TOPOLOGY_CODES = {
 # DEFAULT_DATA_N_EVENTS. Used by 'Make_plots.py' to scale 'plot_histograms' uncertainties down to
 # that many events for '1Dhist_data.pdf', instead of the much larger test-sample statistics, and by
 # the metric scripts and 'Bootstrap_swd.py' to compute the data-scale metrics.
-DEFAULT_DATA_N_EVENTS = 130400
+DEFAULT_DATA_N_EVENTS = 130400*4 # 4 times the total T2K ND sample size.
 DATA_N_EVENTS = {}
 
 def data_n_events_of(total_n_events, target_topology_rates_file, topology):

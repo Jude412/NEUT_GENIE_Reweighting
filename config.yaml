@@ -1,9 +1,9 @@
 inputs:
   # original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_test"
-  original_dir: "/vols/dune/jmm224/t2knova/reweighting/NEUT_test_20M"
+  original_dir: "/work4/ppd/scarf1585/t2knova/reweight/full_prod_2/GENIE"
   original_tree: "T2KNOvATruthTree"
   # target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test"
-  target_dir: "/vols/dune/jmm224/t2knova/reweighting/GENIE_test_20M"
+  target_dir: "/work4/ppd/scarf1585/t2knova/reweight/full_prod_2/NEUT"
   target_tree: "T2KNOvATruthTree"
 
 analysis:
@@ -21,7 +21,7 @@ analysis:
     - NC1pi0
     - NCNpi
     - NCOther
-    - Other
+    # - Other
 
   #choose from CC0pi, CC1pipm, CC1pi0, CCNpi, CCgamma, CCOther, NCInc and rest (rest should be empty)
   #a separate training is run for each listed topology
@@ -32,13 +32,18 @@ analysis:
   # Optional fraction of each input file's events to read in (between 0 and 1)
   downsampling: ~
 
-  # Max number of training events to train on per topology (original will be scaled by same fraction)
-  max_training_events: 2000000
+  # Optional cap on the number of events trained (and validated) on per topology, as a multiple of
+  # the topology's data size: the number of events the real downstream analysis will use for the
+  # sample (Constants.DATA_N_EVENTS), split across its topologies by their target rates. The cap
+  # applies to the larger of the original and target samples, the other being scaled by the same
+  # fraction. Unset (~) trains on every event.
+  max_training_events_factor: 5
 
 parameters:
   # parameters to train the reweighting models on
   # reweighting: ["Enu_true", "PLep", "CosLep", "q0", "q3", "Q2", "W", "N_pi", "N_pi0", "N_pip", "N_pim", "N_thresh_p", "y", "Eav", "PTlep"]
-  reweighting: ["Enu_true", "PLep", "CosLep", "PTlep", "Eav"]
+  # reweighting: ["Enu_true", "PLep", "CosLep", "PTlep", "Eav"]
+  reweighting: ["Enu_true", "PLep", "CosLep", "PTlep", "Eav", "q0", "q3", "W"]
 
   # Sets of parameters the metrics are computed on, each named by its key. Samples, bootstrapped
   # SWD distributions and metrics are produced for every set listed here.
@@ -58,13 +63,19 @@ parameters:
 
 models:
   model_list:
-    - binning
+    # - binning
     - XGB
     # - unnormXGB
   # choose from binning, XGB (XGBoost), unnormXGB (XGB without normalised training classes)
 
   # Json file holding the hyperparameter grid every model is fine-tuned over
-  grid_file: "hyperparameter_grids.json"
+  grid_file: "hyperparameter_grids_single.json"
+
+  # Optional json file of grid points to leave out of the fine-tuning, as
+  # {sample: {topology: {model: [hp_id, ...]}}}: they are neither trained nor considered when the
+  # best hyperparameter set is picked. A sample or topology given as "*" applies to all of them.
+  # Unset (~) runs the whole grid.
+  excluded_hps_file: ~
 
   # Metric the best hyperparameter set of every model is picked with, and whether it is
   # minimised ("min") or maximised ("max"). The metrics are named after the parameter sets
@@ -88,8 +99,8 @@ swd_bootstrapping:
   #                      evaluated on. Multiplies the cost of every job, without changing
   #                      how many jobs there are.
 
-  runs: 100
-  n_samples: 4
+  runs: 5
+  n_samples: 200
   n_directions: 500
   # runs: 1
   # n_samples: 5
@@ -101,7 +112,7 @@ data_scale:
   # the full test sample. The SWD bootstrap above is drawn at that size too.
   #   n_subsamples       the number of data-sized subsamples of the original and target test samples
   #                      the data-scale SWD (mean) and p-value (median) of every run are taken over.
-  n_subsamples: 10
+  n_subsamples: 15
 
 output:
-  tag: "full_params2"
+  tag: "complete_1_q0q3W"

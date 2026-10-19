@@ -1,8 +1,8 @@
 # Overrides of config.yaml for running on SCARF. Loaded by the profiles/scarf profile, and merged
 # over config.yaml, so only the keys that differ between sites are listed here.
 inputs:
-  original_dir: "/work4/ppd/scarf1585/t2knova/reweight/NEUT_test_20M"
-  target_dir: "/work4/ppd/scarf1585/t2knova/reweight/GENIE_test_20M"
+  original_dir: "/work4/ppd/scarf1585/t2knova/reweight/full_prod_2/GENIE"
+  target_dir: "/work4/ppd/scarf1585/t2knova/reweight/full_prod_2/NEUT"
 
 parameters:
   binning_file: "binnings.json"

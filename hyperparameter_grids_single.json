@@ -1,0 +1,28 @@
+{
+  "binning": {
+    "n_bins": [6, 8, 10, 12, 14, 16, 18, 20],
+    "n_neighs": [0, 1]
+  },
+  "XGB": {
+    "n_estimators": [10000],
+    "learning_rate": [0.3],
+    "max_depth": [3],
+    "subsample": [1],
+    "gamma_frac": [6e-6],
+    "min_child_weight": [10],
+    "lambda_frac": [0.1],
+    "alpha_frac": [0],
+    "early_stopping_rounds": [50]
+  },
+  "unnormXGB": {
+    "n_estimators": [10000],
+    "learning_rate": [0.3],
+    "max_depth": [3],
+    "subsample": [1],
+    "gamma_frac": [6e-6],
+    "min_child_weight": [10],
+    "lambda_frac": [0.1],
+    "alpha_frac": [0],
+    "early_stopping_rounds": [50]
+  }
+}

@@ -2,13 +2,16 @@
 
 The functions below take as input the original and target distributions and the weights predicted by
 any reweighting method, and write the 1D histograms (with the ratio of the reweighted distribution
-over the target one), the 2D histograms (ratio or statistical pull) and the training history of the
-models that carry one. The metrics they display are computed by 'Metrics_ndim.py'.
+over the target one), the triangle plots (the original and target distributions, the target over the
+reweighted distribution and the pull between them) and the training history of the models that carry
+one. The metrics they display are computed by 'Metrics_ndim.py'.
 
 The weights need not be normalised (ie enforcing np.sum(weights) = 1): the normalisation is included
 in the plots themselves."""
 
 #Imports
+
+import os
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -56,8 +59,10 @@ def labels_of(params):
 def use_latex_default_font():
     """Switch matplotlib's font to LaTeX's default (Computer Modern), overriding the one 'mh.style.use'
     sets. This only changes matplotlib's own font choice, not 'text.usetex': it stays fast and does not
-    need a LaTeX installation."""
-    plt.rcParams.update({"font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm"})
+    need a LaTeX installation. The tick labels are written in mathtext, since cmr10 itself has no
+    minus sign glyph."""
+    plt.rcParams.update({"font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm",
+                         "axes.formatter.use_mathtext": True})
 
 def plot_histograms(original, target, weights_dict, dict_binning, original_weights = None, target_weights = None,
                     xlabels = ["E_nu(GeV)", "E_lepton(GeV)", "cos_theta_lepton"],
@@ -260,104 +265,208 @@ def plot_histograms(original, target, weights_dict, dict_binning, original_weigh
 
     return None
 
-def plot_2D_histogram(original, target, weights_dict, target_weights = None, xlabels = ["E_nu(GeV)", "E_lepton(GeV)", "Cos Theta_l"], 
-                      nbins = 30, pull = False, output_file = "/vols/dune/jmm224/t2knova/reweighting/saved_figures/histograms_and_ratios_2D.pdf"):
-    mh.style.use("DUNE")
-    use_latex_default_font()
-    combinations = np.array(np.meshgrid(range(len(xlabels)), range(len(xlabels)))).T.reshape(-1, 2)
-    target_norm = np.sum(target_weights) if target_weights is not None else len(target)
-    with PdfPages(f"{output_file}") as pdf:
-        for combination in combinations:
-            i, j = combination
-            if i > j:
-                percents = np.linspace(0, 100, nbins)
-                bins_i = np.percentile(target[:, i], percents)
-                bins_j = np.percentile(target[:, j], percents)
-                if target_weights is not None:
-                    hist_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=target_weights/target_norm)
-                else:
-                    hist_target, x_edges, y_edges = np.histogram2d( target[:, i], target[:, j], bins=(bins_i, bins_j), weights=np.ones_like(target[:, i])/len(target))
-                for key in weights_dict.keys():
-                    if pull:
-                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/target_norm)
-                        hist_rw_uncert = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=(weights_dict[key]/target_norm)**2)[0]
-                        sigma = np.sqrt(hist_rw_uncert)
+# Chart colours: a sequential blue ramp for magnitudes, and a blue <-> red ramp diverging about a
+# neutral grey for quantities with a meaningful midpoint, on a near-white surface.
+SURFACE = "#fcfcfb"
+TEXT_PRIMARY = "#0b0b0b"
+TEXT_SECONDARY = "#52514e"
+SEQUENTIAL_COLOURS = [SURFACE, "#cde2fb", "#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b"]
+DIVERGING_COLOURS = ["#8a2323", "#e34948", "#f0efec", "#2a78d6", "#104281"]
+LINE_COLOUR = "#2a78d6"
+UNDEFINED_HATCH = "#a8a69f"
 
-                        hist_pull = np.divide(
-                            hist_rw - hist_target,
-                            sigma,
-                            out=np.zeros_like(hist_rw),
-                            where=sigma > 0
-                        )
+def triangle_edges(target, params, binning_dict, n_bins):
+    """Return the bin edges of every parameter of a triangle plot: 'n_bins' uniform bins over the range
+    of the binning file when it lists the parameter, and over the 1-99% range of the target otherwise
+    (as 'plot_histograms' does)."""
+    edges = []
+    for i, param in enumerate(params):
+        if param in binning_dict:
+            x_min, x_max = binning_dict[param]["x_min"], binning_dict[param]["x_max"]
+        else:
+            x_min, x_max = np.percentile(target[:, i], [1, 99])
+            if np.abs(x_min) < 5e-2:
+                x_min = 0
+        edges.append(np.linspace(x_min, x_max, n_bins + 1))
+    return edges
 
-                        pull_masked = np.ma.masked_where(sigma == 0, hist_pull)
-                        # colormap with white for masked
-                        cmap = matplotlib.colormaps['coolwarm']
-                        cmap.set_bad(color='white')
+def _histogram(sample, weights, i, j, edges):
+    """Return the weighted histogram of a sample in parameter i (j None) or in (i, j)."""
+    if j is None:
+        return np.histogram(sample[:, i], bins=edges[i], weights=weights)[0]
+    return np.histogram2d(sample[:, i], sample[:, j], bins=(edges[i], edges[j]), weights=weights)[0]
 
-                        # symmetric color scale around 0
-                        max_delta = np.max(np.abs(pull_masked))
-                        normalized_pull = pull_masked / max_delta
-                        delta = np.max(np.abs(normalized_pull))
-                        vmin, vmax = -delta, delta
-                        fig, ax = plt.subplots(figsize=(8, 8), constrained_layout=True)
+def _draw_triangle(pdf, edges, labels, cell, diagonal, cmap, norm, colour_label, diagonal_label, title,
+                   diagonal_ylim=None, log_ticks=None, reference_lines=(), extend="neither", hatch_undefined=False):
+    """Draw one page of a triangle plot. The panel in row r and column c < r shows cell(c, r) (a 2D
+    array over the bins of parameters c and r, masked where undefined), and the diagonal panel c
+    shows diagonal(c) (an array over the bins of parameter c, NaN where undefined).
 
-                        im = ax.imshow(
-                            normalized_pull.T,
-                            origin='lower',
-                            aspect='auto',
-                            extent=(x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]),
-                            cmap=cmap,
-                            vmin=vmin,
-                            vmax=vmax
-                        )
+    'log_ticks' puts the diagonal panels and the colour bar on a log scale, labelled at those values.
+    'hatch_undefined' hatches the masked cells, so that they read apart from every colour of the scale
+    (the ratio's near-white midpoint above all); it also leaves the diagonal outlines open, as a value
+    of 0 would have no meaning there."""
+    n = len(edges)
+    fig, axes = plt.subplots(n, n, figsize=(2.3 * n, 2.3 * n), facecolor=SURFACE)
+    fig.subplots_adjust(wspace=0.08, hspace=0.08, left=0.08, right=0.97, bottom=0.07, top=0.97)
+    tick_labels = [f"{tick:g}" for tick in log_ticks] if log_ticks is not None else None
+    mappable = None
+    for r in range(n):
+        for c in range(n):
+            ax = axes[r, c]
+            ax.set_facecolor(SURFACE)
+            if c > r:
+                ax.set_axis_off()
+                continue
+            if c == r:
+                ax.stairs(diagonal(c), edges[c], color=LINE_COLOUR, linewidth=2,
+                          baseline=None if hatch_undefined else 0)
+                for y in reference_lines:
+                    ax.axhline(y, color=TEXT_SECONDARY, linewidth=0.8, linestyle=":")
+                if log_ticks is not None:
+                    ax.set_yscale("log")
+                    ax.set_yticks(log_ticks, tick_labels)
+                    ax.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+                if diagonal_ylim is not None:
+                    ax.set_ylim(*diagonal_ylim)
+                ax.yaxis.tick_right()
+                ax.yaxis.set_label_position("right")
+                if c == 0:
+                    ax.set_ylabel(diagonal_label, fontsize=8, color=TEXT_SECONDARY)
+            else:
+                if hatch_undefined:
+                    ax.patch.set_hatch("////")
+                    ax.patch.set_edgecolor(UNDEFINED_HATCH)
+                    ax.patch.set_linewidth(0)
+                mappable = ax.pcolormesh(edges[c], edges[r], cell(c, r).T, cmap=cmap, norm=norm,
+                                         rasterized=True)
+                ax.set_ylim(edges[r][0], edges[r][-1])
+                # Pruned, so that the end labels of neighbouring panels do not run into each other.
+                ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(4, prune="both"))
+            ax.set_xlim(edges[c][0], edges[c][-1])
+            ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(4, prune="both"))
+            ax.tick_params(labelsize=7, colors=TEXT_SECONDARY, length=2)
+            for spine in ax.spines.values():
+                spine.set_color(TEXT_SECONDARY)
+                spine.set_linewidth(0.5)
+            if r == n - 1:
+                ax.set_xlabel(labels[c], fontsize=9, color=TEXT_PRIMARY)
+            else:
+                ax.tick_params(labelbottom=False)
+            if c == 0 and r > 0:
+                ax.set_ylabel(labels[r], fontsize=9, color=TEXT_PRIMARY)
+            elif c != r:
+                ax.tick_params(labelleft=False)
+    # The title and the colour bar sit in the empty upper triangle.
+    fig.text(0.97, 0.95, title, ha="right", va="top", fontsize=12, color=TEXT_PRIMARY)
+    if mappable is not None:
+        cax = fig.add_axes([0.6, 0.86, 0.35, 0.018])
+        bar = fig.colorbar(mappable, cax=cax, orientation="horizontal", extend=extend)
+        if log_ticks is not None:
+            bar.set_ticks(log_ticks, labels=tick_labels)
+            bar.ax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+        bar.set_label(colour_label, fontsize=9, color=TEXT_SECONDARY)
+        bar.ax.tick_params(labelsize=7, colors=TEXT_SECONDARY)
+        bar.outline.set_visible(False)
+    pdf.savefig(fig, facecolor=SURFACE)
+    plt.close(fig)
 
-                        fig.colorbar(im, ax=ax, label='Statistical Pull (Normalized by max pull)')
+def plot_triangles(original, target, weights_dict, params, binning_dict, original_weights, target_weights,
+                   output_dir, labels=None, title_suffix="", n_bins=20, ratio_range=(0.5, 2.0), max_pull=5.0,
+                   density_floor=1e-3, pull_target=None, pull_title_suffix=None):
+    """Write the four triangle plots of a set of parameters: every parameter on the diagonal and every
+    pair of them below it.
 
-                        ax.set_xlabel(f"{xlabels[i]}")
-                        ax.set_ylabel(f"{xlabels[j]}")
-                        ax.set_title(f"2D Histogram Pull ({key})")
+      - 'triangle_original.pdf' and 'triangle_target.pdf': the original and target distributions,
+        normalised to 1. The 2D panels are shown relative to the peak of the same panel over both
+        samples, so the two files are on one colour scale, and on a log scale down to 'density_floor'
+        of that peak, so that the tails of the distributions remain visible beside their peak.
+      - 'triangle_ratio.pdf': target / reweighted, one page per entry of 'weights_dict' (the absolute
+        weights of a model, or the original pre-weights for 'Original'). Both are normalised to the
+        target's total, as in 'plot_histograms', so a normalisation mismatch shows as an offset.
+      - 'triangle_pull.pdf': |reweighted - target| / sigma_target, sigma_target being the target's
+        statistical uncertainty in the bin, one page per entry of 'weights_dict'. The reweighted
+        original is compared to 'pull_target', a (target, target_weights) tuple (ex: a data-sized
+        target subsample, so that sigma_target is the uncertainty of the data, as given by
+        'Metrics_ndim.data_sized_target'), and to the target above by default; normalised as
+        'triangle_ratio.pdf' is, and titled with 'pull_title_suffix' ('title_suffix' by default). Only
+        the target's uncertainty is in the denominator, so the original sample should be much larger
+        than 'pull_target' for the pull of a perfect reweighting to spread as a unit one would.
 
-                        pdf.savefig(fig)
-                        plt.close(fig)
+    Every plot is binned alike, from the target sample above. Bins where a quantity is undefined (no
+    target events, or nothing reweighted) are hatched."""
+    labels = labels if labels is not None else labels_of(params)
+    edges = triangle_edges(target, params, binning_dict, n_bins)
+    target_norm = np.sum(target_weights)
+    original_norm = np.sum(original_weights)
+    sequential = matplotlib.colors.LinearSegmentedColormap.from_list("sequential", SEQUENTIAL_COLOURS)
+    diverging = matplotlib.colors.LinearSegmentedColormap.from_list("diverging", DIVERGING_COLOURS)
+    pairs = [(c, r) for r in range(len(params)) for c in range(r)]
 
-                    else:
-                        hist_rw, x_edges, y_edges = np.histogram2d( original[:, i], original[:, j], bins=(bins_i, bins_j), weights=weights_dict[key]/target_norm)
-                        ratio = np.divide(hist_rw, hist_target, out=np.zeros_like(hist_rw), where=hist_target > 0)
+    with plt.rc_context():
+        plt.style.use("default")
+        use_latex_default_font()
 
-                        # mask invalid bins
-                        ratio_masked = np.ma.masked_where(hist_target == 0, ratio)
+        # Original and target, on one colour scale per 2D panel and one y range per diagonal panel.
+        density = {"original": {}, "target": {}}
+        for name, sample, weights, norm in (("original", original, original_weights, original_norm),
+                                            ("target", target, target_weights, target_norm)):
+            for c, r in pairs:
+                density[name][(c, r)] = _histogram(sample, weights / norm, c, r, edges)
+            for c in range(len(params)):
+                density[name][c] = _histogram(sample, weights / norm, c, None, edges)
+        peak = {key: max(density["original"][key].max(), density["target"][key].max()) for key in density["target"]}
+        for name, title in (("original", "Original"), ("target", "Target")):
+            with PdfPages(os.path.join(output_dir, f"triangle_{name}.pdf")) as pdf:
+                _draw_triangle(pdf, edges, labels,
+                               cell=lambda c, r: density[name][(c, r)] / peak[(c, r)] if peak[(c, r)] > 0 else density[name][(c, r)],
+                               diagonal=lambda c: density[name][c],
+                               cmap=sequential, norm=matplotlib.colors.LogNorm(density_floor, 1),
+                               colour_label="density relative to the panel's peak (original and target)",
+                               diagonal_label="fraction of events",
+                               diagonal_ylim=(0, 1.1 * max(peak[c] for c in range(len(params)))),
+                               extend="min", title=f"{title} distributions{title_suffix}")
 
-                        # colormap with white for masked
-                        cmap = matplotlib.colormaps['coolwarm']
-                        cmap.set_bad(color='white')
+        # Target over reweighted, and the pull of reweighted from target, for every set of weights.
+        # Both the target and reweighted distributions are normalised to the target's total.
+        def target_and_reweighted(original, target, weights, target_weights, c, r):
+            norm = np.sum(target_weights)
+            t = _histogram(target, target_weights / norm, c, r, edges)
+            t_variance = _histogram(target, (target_weights / norm) ** 2, c, r, edges)
+            rw = _histogram(original, weights / norm, c, r, edges)
+            return t, np.sqrt(t_variance), rw
 
-                        # symmetric color scale around 1
-                        ratio_delta = ratio_masked - 1
-                        delta = np.max(np.abs(ratio_delta))
-                        vmin, vmax = -delta, delta
+        def ratio(weights, c, r=None):
+            t, _, rw = target_and_reweighted(original, target, weights, target_weights, c, r)
+            return np.ma.masked_where((t <= 0) | (rw <= 0), np.divide(t, rw, out=np.ones_like(t), where=rw > 0))
 
-                        fig, ax = plt.subplots(figsize=(8, 8), constrained_layout=True)
+        pull_target, pull_target_weights = pull_target if pull_target is not None else (target, target_weights)
+        pull_title_suffix = pull_title_suffix if pull_title_suffix is not None else title_suffix
 
-                        im = ax.imshow(
-                            ratio_delta.T,
-                            origin='lower',
-                            aspect='auto',
-                            extent=(x_edges[0], x_edges[-1], y_edges[0], y_edges[-1]),
-                            cmap=cmap,
-                            vmin=vmin,
-                            vmax=vmax
-                        )
+        def pull(weights, c, r=None):
+            t, sigma, rw = target_and_reweighted(original, pull_target, weights, pull_target_weights, c, r)
+            return np.ma.masked_where(sigma <= 0, np.divide(np.abs(rw - t), sigma, out=np.zeros_like(t), where=sigma > 0))
 
-                        fig.colorbar(im, ax=ax, label='(Reweighted Original / Target) - 1 ')
-                        ax.set_xlabel(f"{xlabels[i]}")
-                        ax.set_ylabel(f"{xlabels[j]}")
-                        ax.set_title(f"2D Histogram Ratio ({key})")
-
-                        pdf.savefig(fig)
-                        plt.close(fig)
-
-    return None
+        # The ratio is drawn on a log scale, symmetric about 1, so that a ratio and its inverse are
+        # equally far from the neutral midpoint.
+        ratio_ticks = [ratio_range[0], 1, ratio_range[1]]
+        with PdfPages(os.path.join(output_dir, "triangle_ratio.pdf")) as pdf:
+            for key, weights in weights_dict.items():
+                _draw_triangle(pdf, edges, labels,
+                               cell=lambda c, r: ratio(weights, c, r), diagonal=lambda c: ratio(weights, c).filled(np.nan),
+                               cmap=diverging, norm=matplotlib.colors.LogNorm(*ratio_range),
+                               colour_label="target / reweighted", diagonal_label="target / reweighted",
+                               diagonal_ylim=ratio_range, log_ticks=ratio_ticks, reference_lines=(1,), extend="both",
+                               hatch_undefined=True, title=f"Target / {key}{title_suffix}")
+        with PdfPages(os.path.join(output_dir, "triangle_pull.pdf")) as pdf:
+            for key, weights in weights_dict.items():
+                _draw_triangle(pdf, edges, labels,
+                               cell=lambda c, r: pull(weights, c, r), diagonal=lambda c: pull(weights, c).filled(np.nan),
+                               cmap=sequential, norm=matplotlib.colors.Normalize(0, max_pull),
+                               colour_label=r"$|$reweighted $-$ target$|$ / $\sigma_{target}$",
+                               diagonal_label=r"$|$reweighted $-$ target$|$ / $\sigma_{target}$",
+                               diagonal_ylim=(0, max_pull), reference_lines=(1, 3), extend="max",
+                               hatch_undefined=True, title=f"Pull of {key} from target{pull_title_suffix}")
 
 def plot_training_history(model, output_file, title="Training history"):
     """Plot the training and validation log loss of a model against the boosting iteration.

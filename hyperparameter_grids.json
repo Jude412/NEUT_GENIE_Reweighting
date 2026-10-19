@@ -1,17 +1,17 @@
 {
   "binning": {
     "n_bins": [6, 8, 10, 12, 14, 16, 18, 20],
-    "n_neighs": [0, 1, 2]
+    "n_neighs": [0]
   },
   "XGB": {
     "n_estimators": [10000],
-    "learning_rate": [0.05, 0.1, 0.2, 0.3],
-    "max_depth": [3, 6, 9],
+    "learning_rate": [0.05, 0.1, 0.3],
+    "max_depth": [3, 5, 7],
     "subsample": [1],
-    "gamma_frac": [0], 
-    "min_child_weight_frac": [6e-07],
-    "lambda_frac": [1.0e-4, 6.0e-04, 6.0e-03, 6.0e-02, 1.0e-01],
-    "alpha_frac": [0, 1.2e-5, 6e-6, 6.0e-05, 6.0e-04],
+    "gamma_frac": [0, 1e-6, 1e-5], 
+    "min_child_weight": [5],
+    "lambda_frac": [1e-03, 1e-02, 0.1, 0.3],
+    "alpha_frac": [0, 1e-5],
     "early_stopping_rounds": [50]
   },
   "unnormXGB": {

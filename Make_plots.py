@@ -1,6 +1,6 @@
 """Make the plots comparing the original, reweighted and target distributions.
 
-The 1D histograms are made for every analysis parameter, and the 2D ones for the parameters the models
+The 1D histograms are made for every analysis parameter, and the triangle plots for the parameters the models
 are trained on. Every model is loaded from the symlink 'Gather_metrics.py' writes for its best
 hyperparameter set, and its weights are predicted here rather than read from disk. The training history
 of the models that carry one (the XGBoost ones) is plotted from the model itself. The metrics displayed
@@ -10,7 +10,8 @@ on the plots are computed by 'Metrics_ndim.py', and the ones written to disk by 
 import os
 
 from Constants import data_n_events_of
-from Plots_ndim import labels_of, plot_2D_histogram, plot_histograms, plot_training_history
+from Metrics_ndim import cap_data_n_events, data_sized_target, data_subsample_indices
+from Plots_ndim import labels_of, plot_histograms, plot_training_history, plot_triangles
 from Sample_io import load_sample, load_samples, sample_params
 from Train_predict import load_model, predict_model
 import argparse
@@ -28,7 +29,8 @@ if __name__ == "__main__":
                            help='List of analysis parameters the models were trained on, to predict their weights with.')
     argparser.add_argument('--output_dir', type=str, required=True, help='Directory to save the plots in.')
     argparser.add_argument('--make_1D_plots', action=argparse.BooleanOptionalAction, help='Whether to make the 1D plots or not.')
-    argparser.add_argument('--make_2D_plots', action=argparse.BooleanOptionalAction, help='Whether to make the 2D plots or not.')
+    argparser.add_argument('--make_triangle_plots', action=argparse.BooleanOptionalAction, default=True,
+                           help='Whether to make the triangle plots of the reweighting parameters or not.')
     argparser.add_argument('--make_training_history', action=argparse.BooleanOptionalAction, default=True,
                            help='Whether to plot the training history of the models carrying one or not.')
     argparser.add_argument("--binning_file", type=str, required=True,
@@ -36,7 +38,12 @@ if __name__ == "__main__":
     argparser.add_argument("--data_n_events", type=float, required=True,
                            help="Total number of raw events the real downstream analysis will use for this "
                                 "sample, split across topologies by '--target_topology_rates_file'. Used to "
-                                "scale the uncertainties of '1Dhist_data.pdf' down from the test sample's.")
+                                "draw the data-sized target subsample '1Dhist_data.pdf' and the pull "
+                                "triangle plot compare the reweighted test sample to.")
+    argparser.add_argument("--subsample_seed", type=int, required=True,
+                           help="Seed the data-sized subsample is drawn from. Give the one the metrics of this "
+                                "sample and topology were computed with, so that the plotted subsample is the "
+                                "first of their data-scale subsamples.")
     argparser.add_argument("--target_topology_rates_file", type=str, required=True,
                            help="Path to the json file mapping every topology of this sample to the summed "
                                 "PreWeight of its target events, as written by 'Init.py'.")
@@ -73,8 +80,20 @@ if __name__ == "__main__":
     print(f"Plotting {len(params)} params: {params}")
     print(f"Original shape = {original_test.shape}, Target shape = {target_test.shape}")
 
+    weights_dict = weights_of(original_test_weight)
+
+    # The data-sized target subsample '1Dhist_data.pdf' and the pull triangle plot compare the full
+    # reweighted original test sample to (see 'Metrics_ndim.data_sized_target'): as many events as the
+    # real downstream analysis will use for this topology, or the whole test sample when that is
+    # smaller. It is the first of the data-scale metrics' ('Compute_metrics.py'), as both are drawn
+    # with the same seed; the original indices drawn alongside it are only used by their data-scale SWD.
+    n_events = cap_data_n_events(data_n_events_of(args.data_n_events, args.target_topology_rates_file, args.topology),
+                                 min(len(original_test), len(target_test)))
+    (_, target_index), = data_subsample_indices(len(original_test), len(target_test), n_events, 1, args.subsample_seed)
+    data_target, data_target_weight = data_sized_target(target_test, target_test_weight, target_index)
+
     if args.make_1D_plots:
-        plot_histograms(original_test, target_test, weights_of(original_test_weight),
+        plot_histograms(original_test, target_test, weights_dict,
                         dict_binning=binning_dict,
                         original_weights=original_test_weight,
                         target_weights=target_test_weight,
@@ -82,25 +101,27 @@ if __name__ == "__main__":
                         variables=params,
                         output_file=os.path.join(args.output_dir, "1Dhist.pdf"))
 
-        # Same plots, but with uncertainties scaled to the number of events the real downstream
-        # analysis will actually use for this topology, rather than this much larger test sample.
-        n_events = data_n_events_of(args.data_n_events, args.target_topology_rates_file, args.topology)
-        plot_histograms(original_test, target_test, weights_of(original_test_weight),
+        # Same plots against the data-sized target subsample.
+        plot_histograms(original_test, data_target, weights_dict,
                         dict_binning=binning_dict,
                         original_weights=original_test_weight,
-                        target_weights=target_test_weight,
+                        target_weights=data_target_weight,
                         xlabels=labels_of(params),
                         variables=params,
-                        n_events=n_events,
                         output_file=os.path.join(args.output_dir, "1Dhist_data.pdf"))
 
-    if args.make_2D_plots:
-        plot_2D_histogram(original_test, target_test, weights_of(original_test_weight),
-                          target_weights=target_test_weight,
-                          xlabels=labels_of(params),
-                          nbins=30,
-                          pull=True,
-                          output_file=os.path.join(args.output_dir, "2Dhist.pdf"))
+    if args.make_triangle_plots:
+        # The original and target distributions of the reweighting parameters and the target over the
+        # reweighted distribution, for every model and for the original sample, on the full test
+        # samples; and the pull of the reweighted distribution from the data-sized target subsample, in
+        # units of that subsample's uncertainty.
+        indices = [params.index(param) for param in args.reweight_params]
+        plot_triangles(original_test[:, indices], target_test[:, indices], weights_dict,
+                       params=args.reweight_params, binning_dict=binning_dict,
+                       original_weights=original_test_weight, target_weights=target_test_weight,
+                       output_dir=args.output_dir, title_suffix=f", {args.topology}",
+                       pull_target=(data_target[:, indices], data_target_weight),
+                       pull_title_suffix=f", {args.topology}, data-sized target ({n_events} events)")
 
     if args.make_training_history:
         for model, trained_model in models.items():

@@ -215,7 +215,9 @@ def cap_data_n_events(n_events, sample_size):
 
 def data_subsample_indices(n_original, n_target, n_events, n_subsamples, seed):
     """Return 'n_subsamples' pairs of (original, target) event indices, each drawing 'n_events'
-    events of the original and of the target test samples without replacement.
+    events of the original and of the target test samples without replacement. The data-scale SWD
+    compares both subsamples of a pair; every other data-scale comparison compares the full original
+    test sample to the target subsample alone (see 'data_sized_target').
 
     Every parameter set is read from the same files with the same topology filter, so the indices
     apply to the samples of all of them. The baseline job and every 'compute_metrics' job of a sample
@@ -226,8 +228,26 @@ def data_subsample_indices(n_original, n_target, n_events, n_subsamples, seed):
              np.sort(rng.choice(n_target, size=n_events, replace=False)))
             for _ in range(n_subsamples)]
 
+def data_sized_target(target, target_weights, target_index):
+    """Return the (events, weights) of the data-sized subsample of the target test sample that
+    'target_index' selects (the target indices of 'data_subsample_indices').
+
+    This is the data the reweighted original is compared to at the data scale, by the 'data_chi2_*'
+    metrics, '1Dhist_data.pdf' and 'triangle_pull.pdf'. Each compares it to the full reweighted
+    original test sample, as a high-statistics prediction is compared to data. The data-scale SWD 
+    still compares data-sized subsamples of both samples, as the bootstrapped distribution its p-value
+    is read against is drawn from pairs of data-sized samples."""
+
+    return target[target_index], target_weights[target_index] * len(target) / len(target_index)
+
+def data_chi2_metrics(chi2s_and_dofs):
+    """Return the (mean chi2/dof, median chi2 p-value) of the (chi2, dof) against every data-sized
+    target subsample, combined as the data-scale SWD and its p-value are."""
+    return (float(np.mean([chi2 / dof if dof > 0 else 0 for chi2, dof in chi2s_and_dofs])),
+            float(np.median([chi2_p_value(chi2, dof) for chi2, dof in chi2s_and_dofs])))
+
 def compute_all_metrics(testing_samples, weights, param_set_dict, binning_dict, swd_distributions,
-                        swd_seed, n_directions, n_events, subsamples):
+                        swd_seed, n_directions, subsamples):
     """Return the {metric name: value} dictionary of the original test sample carrying the absolute
     weights 'weights' against the target test sample.
 
@@ -239,7 +259,9 @@ def compute_all_metrics(testing_samples, weights, param_set_dict, binning_dict, 
         by 'data_subsample_indices'), and the median of their p-values against the bootstrapped SWD
         distribution. A single subsample would make the hyperparameter selection pick the luckiest draw.
       - 'chi2_dof_{set}' and 'chi2_p_value_{set}' on the full test samples, and 'data_chi2_dof_{set}'
-        and 'data_chi2_p_value_{set}' with their uncertainties scaled to 'n_events' events.
+        and 'data_chi2_p_value_{set}': the mean chi2/dof of the full original test sample against
+        each data-sized target subsample of the same 'subsamples' (see 'data_sized_target'), with the
+        subsample's own statistical uncertainties, and the median of their p-values.
     and the same chi2 metrics for every analysis parameter taken on its own, plus 'norm_test'."""
     # 'compute_swd' takes a dictionary of weights, of which this is the only key.
     key = "weights"
@@ -271,22 +293,32 @@ def compute_all_metrics(testing_samples, weights, param_set_dict, binning_dict, 
             print(f"Warning: no bootstrapped SWD distribution given for the parameter set '{set_name}': "
                   "its data-scale p-value is not computed.")
 
-        for prefix, scale in (("", None), ("data_", n_events)):
-            chi2, dof = chi2_hist_naxis(original, target, weights, binning_dict, target_weight,
-                                        param_set_dict[set_name], n_events=scale)
-            metrics[f"{prefix}chi2_dof_{set_name}"] = chi2/dof if dof > 0 else 0
-            metrics[f"{prefix}chi2_p_value_{set_name}"] = chi2_p_value(chi2, dof)
+        chi2, dof = chi2_hist_naxis(original, target, weights, binning_dict, target_weight,
+                                    param_set_dict[set_name])
+        metrics[f"chi2_dof_{set_name}"] = chi2/dof if dof > 0 else 0
+        metrics[f"chi2_p_value_{set_name}"] = chi2_p_value(chi2, dof)
+        # The full reweighted original against each data-sized target subsample.
+        metrics[f"data_chi2_dof_{set_name}"], metrics[f"data_chi2_p_value_{set_name}"] = data_chi2_metrics(
+            [chi2_hist_naxis(original, data_target, weights, binning_dict, data_target_weight,
+                             param_set_dict[set_name])
+             for data_target, data_target_weight in (data_sized_target(target, target_weight, target_index)
+                                                     for _, target_index in subsamples)])
 
     # Chi2 of every analysis parameter taken on its own.
     all_params_original, _ = testing_samples[ALL_PARAMS_SET]["original_test"]
     all_params_target, all_params_target_weight = testing_samples[ALL_PARAMS_SET]["target_test"]
+    all_params_data_targets = [data_sized_target(all_params_target, all_params_target_weight, target_index)
+                               for _, target_index in subsamples]
     for param_index, param in enumerate(param_set_dict[ALL_PARAMS_SET]):
         n_bins, x_min, x_max = binning_of(param, binning_dict)
-        for prefix, scale in (("", None), ("data_", n_events)):
-            chi2, dof = chi2_hist_axis(all_params_original, all_params_target, weights,
-                                       axis_number=param_index, target_weights=all_params_target_weight,
-                                       n_bins=n_bins, x_min=x_min, x_max=x_max, n_events=scale)
-            metrics[f"{prefix}chi2_dof_{param}"] = chi2/dof if dof > 0 else 0
-            metrics[f"{prefix}chi2_p_value_{param}"] = chi2_p_value(chi2, dof)
+        chi2, dof = chi2_hist_axis(all_params_original, all_params_target, weights,
+                                   axis_number=param_index, target_weights=all_params_target_weight,
+                                   n_bins=n_bins, x_min=x_min, x_max=x_max)
+        metrics[f"chi2_dof_{param}"] = chi2/dof if dof > 0 else 0
+        metrics[f"chi2_p_value_{param}"] = chi2_p_value(chi2, dof)
+        metrics[f"data_chi2_dof_{param}"], metrics[f"data_chi2_p_value_{param}"] = data_chi2_metrics(
+            [chi2_hist_axis(all_params_original, data_target, weights, axis_number=param_index,
+                            target_weights=data_target_weight, n_bins=n_bins, x_min=x_min, x_max=x_max)
+             for data_target, data_target_weight in all_params_data_targets])
 
     return metrics

@@ -14,6 +14,9 @@ jobs: 5000
 default-resources:
   slurm_account: ppd
   slurm_partition: scarf
+  # Extra sbatch options for every job. A rule setting its own slurm_extra replaces this, so it
+  # would have to repeat the exclusion.
+  slurm_extra: "'--exclude=cn055'"
   mem_mb: 4000
   runtime: 180
 

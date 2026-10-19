@@ -61,9 +61,10 @@ if __name__ == "__main__":
     with open(args.binning_file, 'r') as f:
         binning_dict = json.load(f)
 
-    # The data-sized subsamples every metric prefixed 'data_' is computed on. Every parameter set is
-    # read from the same files with the same topology filter, so they share their events and one set
-    # of indices applies to all of them.
+    # The data-sized subsamples every metric prefixed 'data_' is computed on: both of every pair for
+    # the SWD, and the target's alone, against the full original, for the chi2 (see
+    # 'Metrics_ndim.data_sized_target'). Every parameter set is read from the same files with the same
+    # topology filter, so they share their events and one set of indices applies to all of them.
     n_original = len(testing_samples[REWEIGHTING_SET]["original_test"][1])
     n_target = len(testing_samples[REWEIGHTING_SET]["target_test"][1])
     n_events = cap_data_n_events(data_n_events_of(args.data_n_events, args.target_topology_rates_file, args.topology),
@@ -75,7 +76,7 @@ if __name__ == "__main__":
     metrics = compute_all_metrics(testing_samples, testing_samples[REWEIGHTING_SET]["original_test"][1],
                                   param_set_dict, binning_dict, swd_distributions,
                                   swd_seed=args.swd_seed, n_directions=args.n_directions,
-                                  n_events=n_events, subsamples=subsamples)
+                                  subsamples=subsamples)
     metrics = {f"{BASELINE_PREFIX}{name}": value for name, value in metrics.items()}
 
     for set_name in testing_samples:

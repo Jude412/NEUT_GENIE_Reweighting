@@ -92,7 +92,13 @@ if __name__ == "__main__":
     argparser.add_argument("--selection", action="append", nargs=3, required=True, metavar=("MODEL", "METRIC", "DIRECTION"),
                            help="Model, metric its best hyperparameter set is picked with, and whether that metric is "
                                 "minimised ('min') or maximised ('max'). Can be given several times, once per model.")
+    argparser.add_argument("--exclude", action="append", nargs=2, default=[], metavar=("MODEL", "HP_ID"),
+                           help="Model and label of a grid point left out of the selection. Can be given several times.")
     args = argparser.parse_args()
+
+    excluded = {}
+    for model, hp_id in args.exclude:
+        excluded.setdefault(model, set()).add(hp_id)
 
     with open(args.grid_file) as f:
         grids = json.load(f)
@@ -107,6 +113,7 @@ if __name__ == "__main__":
         metrics_files = {
             hp_id: os.path.join(args.input_dir, f"{model}", hp_id, "metrics.csv")
             for hp_id in grid
+            if hp_id not in excluded.get(model, set())
         }
         hyperparameters, metrics, hp_id = best_hyperparameters(
             metrics_files, resolved_grid_point(next(iter(grid.values()))), metric, direction
