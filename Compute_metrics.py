@@ -10,7 +10,7 @@ from Constants import data_n_events_of
 from Metrics_ndim import cap_data_n_events, compute_all_metrics, data_subsample_indices
 from Param_sets import REWEIGHTING_SET, named_paths_from_args
 from Sample_io import load_samples
-from Train_predict import best_iteration_of, predict_model, train_model, load_model
+from Train_predict import best_iteration_of, predict_model, train_model, load_model, model_params_of
 import pandas as pd
 import os
 import json
@@ -92,7 +92,15 @@ if __name__ == "__main__":
 
     model_path = os.path.join(args.model_dir, f"{args.model}")
     model = load_model(args.model, model_path)
-    weights_test = predict_model(args.model, model, testing_samples[REWEIGHTING_SET]["original_test"])
+    # The model predicts from the parameters it was trained on, which a per-model reweighting
+    # override can make a subset of the reweighting set the metrics are computed on.
+    model_params = model_params_of(args.model, model_path, default=param_set_dict[REWEIGHTING_SET])
+    if model_params == list(param_set_dict[REWEIGHTING_SET]):
+        weights_test = predict_model(args.model, model, testing_samples[REWEIGHTING_SET]["original_test"])
+    else:
+        weights_test = predict_model(args.model, model, load_samples(args.sample_dir, topology=args.topology,
+                                                                     params=model_params,
+                                                                     sample_names=("original_test",))["original_test"])
     if (args.model == 'XGB') | (args.model == 'unnormXGB'):
         best_iter = best_iteration_of(model)
         metrics.update({

@@ -1,6 +1,7 @@
 configfile: "config.yaml"
 
 from itertools import chain
+import fnmatch
 import glob
 import hashlib
 import json
@@ -13,7 +14,7 @@ import pyarrow.parquet as pq
 from Constants import DATA_N_EVENTS, DEFAULT_DATA_N_EVENTS, TOPOLOGY_CODES, TOPOLOGY_COLUMN, data_n_events_of
 from List_hyperparameters import grids_of_file, labelled_grid_of, labels_of
 from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET
-from Train_predict import model_extension
+from Train_predict import MODEL_NAMES, model_extension
 
 ENV = "environment.yaml"
 TAG = config["output"]["tag"]
@@ -179,13 +180,14 @@ def train_runtime(wildcards, attempt):
 # uncapped number of events: the peak was ~0.6 KB per event (3.7-4.1 GB for CC0pi's 6.5M), with
 # depth-9 models adding up to ~1.3 GB on top for the smallest topologies. That was with the 5
 # reweighting parameters of scarf0 and complete_0, of which the samples read are made: the
-# per-event memory is scaled by the number of reweighting parameters over those 5.
+# per-event memory is scaled by the sample and topology's number of reweighting parameters over those 5.
 TRAIN_MEM_MB_PER_EVENT = 0.5e-3
 TRAIN_MEM_CALIBRATION_PARAMS = 5
 
 def train_mem_mb(wildcards):
     n_events = events_of(wildcards.sample, wildcards.topology, "train")
-    per_event = TRAIN_MEM_MB_PER_EVENT * len(PARAM_SET_DICT[REWEIGHTING_SET]) / TRAIN_MEM_CALIBRATION_PARAMS
+    n_params = len(reweighting_params_of(wildcards.sample, wildcards.topology, wildcards.model))
+    per_event = TRAIN_MEM_MB_PER_EVENT * n_params / TRAIN_MEM_CALIBRATION_PARAMS
     return round_up(max(4000, 2000 + per_event * n_events), 500)
 
 # Metric jobs compute their metrics on the whole test sample, which the training cap does not touch,
@@ -300,6 +302,50 @@ def get_param_set_dict():
     return dict
 
 PARAM_SET_DICT = get_param_set_dict()
+
+# Per sample/topology changes to the reweighting parameters (see 'reweighting_overrides' in the
+# config file), which may only drop parameters, so that PARAM_SET_DICT[ALL_PARAMS_SET], the
+# parameters every sample is read in with, stays a superset of every sample and topology's.
+REWEIGHTING_OVERRIDES = config["parameters"].get("reweighting_overrides") or []
+for override in REWEIGHTING_OVERRIDES:
+    unknown = set(override.get("drop", [])) - set(PARAM_SET_DICT[REWEIGHTING_SET])
+    if unknown:
+        raise ValueError(f"The reweighting override {override} drops {sorted(unknown)}, which are not "
+                         f"reweighting parameters: {PARAM_SET_DICT[REWEIGHTING_SET]}.")
+    unknown = set(override.get("models", [])) - set(MODEL_NAMES)
+    if unknown:
+        raise ValueError(f"The reweighting override {override} is given the models {sorted(unknown)}, "
+                         f"which are not models: {list(MODEL_NAMES)}.")
+
+def reweighting_params_of(sample, topology, model=None):
+    """Return the reweighting parameters of a sample and topology, less the ones every matching
+    'reweighting_overrides' entry drops.
+
+    An entry without 'models' applies to every model and to the reweighting set the metrics of the
+    sample and topology are computed on (and its bootstrapped SWD distribution): it is the one
+    applied when no model is given. An entry with 'models' only changes the parameters those models
+    are trained on (and predict from), so that every model is still compared on the same reweighting
+    set: it is only applied when one of its models is given."""
+    dropped = set()
+    for override in REWEIGHTING_OVERRIDES:
+        if "models" in override and (model is None or model not in override["models"]):
+            continue
+        if (fnmatch.fnmatch(sample, override["samples"])
+                and any(fnmatch.fnmatch(topology, t) for t in override["topologies"])):
+            dropped |= set(override["drop"])
+    params = [p for p in PARAM_SET_DICT[REWEIGHTING_SET] if p not in dropped]
+    if not params:
+        raise ValueError(f"The reweighting overrides drop every reweighting parameter of {sample} {topology}"
+                         + (f" for {model}." if model else "."))
+    return params
+
+def param_set_dict_of(sample, topology):
+    """Return PARAM_SET_DICT with the reweighting parameters of a sample and topology. The keys keep
+    their order, so that a sample and topology no override matches gets the exact same dictionary
+    (and so the same rule parameters) as before overrides existed."""
+    param_set_dict = dict(PARAM_SET_DICT)
+    param_set_dict[REWEIGHTING_SET] = reweighting_params_of(sample, topology)
+    return param_set_dict
 
 # ---------------------------------------------------------------------------
 # Input functions – resolve the single .root file inside a leaf directory.
@@ -495,7 +541,7 @@ rule run_bootstrap:
         output_file=temp(INIT_SWD_DIR + "{param_set}/indiv_bootstrap/run_{run_id}.npy")
     params:
         n_directions=config["swd_bootstrapping"]["n_directions"],
-        param_set=lambda wc: PARAM_SET_DICT[wc.param_set],
+        param_set=lambda wc: param_set_dict_of(wc.sample, wc.topology)[wc.param_set],
         n_bootstrap=config["swd_bootstrapping"]["n_samples"],
         data_n_events=data_n_events_for
     # group: "swd"
@@ -574,7 +620,7 @@ rule train_model:
     params:
         sample_dir=BASE_SAMPLES_DIR,
         model=lambda wc: wc.model,
-        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET],
+        reweight_params=lambda wc: reweighting_params_of(wc.sample, wc.topology, wc.model),
         max_events=lambda wc: max_training_events(wc.sample, wc.topology),
         seed=lambda wc: training_seed(wc.sample, wc.topology)
     output:
@@ -617,7 +663,7 @@ rule compute_baseline_metrics:
         sample_dir=BASE_SAMPLES_DIR,
         binning_file=config["parameters"]["binning_file"],
         n_directions=config["swd_bootstrapping"]["n_directions"],
-        param_set_dict=json.dumps(PARAM_SET_DICT),
+        param_set_dict=lambda wc: json.dumps(param_set_dict_of(wc.sample, wc.topology)),
         swd_seed=lambda wc: swd_direction_seed(wc.sample, wc.topology),
         subsample_seed=lambda wc: data_subsample_seed(wc.sample, wc.topology),
         n_subsamples=N_SUBSAMPLES,
@@ -677,7 +723,7 @@ rule compute_metrics:
                                                      model=wc.model, hp_id=wc.hp_id),
         binning_file=config["parameters"]["binning_file"],
         n_directions=config["swd_bootstrapping"]["n_directions"],
-        param_set_dict=json.dumps(PARAM_SET_DICT),
+        param_set_dict=lambda wc: json.dumps(param_set_dict_of(wc.sample, wc.topology)),
         swd_seed=lambda wc: swd_direction_seed(wc.sample, wc.topology),
         subsample_seed=lambda wc: data_subsample_seed(wc.sample, wc.topology),
         n_subsamples=N_SUBSAMPLES,
@@ -792,7 +838,7 @@ rule make_plots:
         output_dir=FIG_DIR,
         model_dir=FINAL_MODEL_DIR,
         model_list=MODELS,
-        reweight_params=PARAM_SET_DICT[REWEIGHTING_SET],
+        reweight_params=lambda wc: reweighting_params_of(wc.sample, wc.topology),
         data_n_events=data_n_events_for,
         subsample_seed=lambda wc: data_subsample_seed(wc.sample, wc.topology)
 

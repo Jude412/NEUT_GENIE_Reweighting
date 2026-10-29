@@ -2,7 +2,7 @@
 
 #imports
 from Sample_io import load_samples
-from Train_predict import hyperparameters_of, predict_model, train_model, save_model
+from Train_predict import hyperparameters_of, predict_model, train_model, save_model, save_model_params
 import os
 import argparse
 import json
@@ -82,6 +82,8 @@ if __name__ == "__main__":
     os.makedirs(args.output_dir, exist_ok=True)
     model_path = os.path.join(args.output_dir, f"{args.model}")
     save_model(args.model, model, model_path)
+    # The parameters it was trained on, which every script predicting with it must give it.
+    save_model_params(args.model, args.reweighting_params, model_path)
 
     # Written alongside the model rather than stored on it, so that 'Compute_metrics.py' can log the
     # absolute hyperparameters the model was actually trained with (a '..._frac' hyperparameter is

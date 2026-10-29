@@ -4,6 +4,7 @@ The output will be the trained model, which can be used to predict the weights."
 
 #imports
 import json
+import os
 import pickle
 import numpy as np
 from hep_ml import reweight
@@ -333,3 +334,22 @@ def load_model(model_name, path):
     if evals_result_attr is not None:
         model.evals_result_ = json.loads(evals_result_attr)
     return model
+
+def save_model_params(model_name, params, path):
+    """Save the parameters a model was trained on, and so must predict from, alongside the model
+    'save_model' saved at the given path (without extension)."""
+    check_model(model_name)
+    with open(path + "_reweighting_params.json", "w") as f:
+        json.dump(list(params), f)
+
+def model_params_of(model_name, path, default):
+    """Return the parameters the model saved at the given path (without extension) was trained on, as
+    written by 'save_model_params'. The path may be the symlink 'Gather_metrics.py' writes for the
+    best model, which is followed to the run it points to. 'default' (ex: the reweighting parameters
+    of the sample and topology) is returned for a model saved before its parameters were."""
+    model_file = os.path.realpath(path + model_extension(model_name))
+    params_file = os.path.join(os.path.dirname(model_file), f"{model_name}_reweighting_params.json")
+    if not os.path.exists(params_file):
+        return list(default)
+    with open(params_file) as f:
+        return json.load(f)

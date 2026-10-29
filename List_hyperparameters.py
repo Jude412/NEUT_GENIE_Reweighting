@@ -6,7 +6,11 @@ file) holding, for each model, the list of values every hyperparameter is scanne
     {"binning": {"n_bins": [5, 10], "n_neighs": [0, 1]}, "XGB": {...}}
 
 The grid of a model is the cartesian product of those lists, so the example above gives four
-sets of hyperparameters. One json file is written per set, named
+sets of hyperparameters. A model can instead be given a list of such grids, to scan the union of
+their sets rather than every combination of their values:
+    {"XGB": [{"learning_rate": [0.1], "gamma_frac": [6e-6]}, {"learning_rate": [0.3], "gamma_frac": [0]}]}
+gives two sets. The grids should give the same hyperparameters, so that every set is labelled alike,
+and no two sets may be the same. One json file is written per set, named
 '{model}/{model}_hp_{label}.json', alongside a '{model}/{model}_job.sub' file listing them for
 batch submission."""
 
@@ -45,7 +49,10 @@ def label_of(hyperparameters):
                     for name in sorted(hyperparameters))
 
 def grid_of(model_grid):
-    """Return the list of hyperparameter sets of a model, i.e. the cartesian product of its grid."""
+    """Return the list of hyperparameter sets of a model, i.e. the cartesian product of its grid, or,
+    when it is given a list of grids, the sets of every one of them in turn."""
+    if isinstance(model_grid, list):
+        return [hyperparameters for grid in model_grid for hyperparameters in grid_of(grid)]
     names = list(model_grid)
     value_lists = [model_grid[name] for name in names]
     return [dict(zip(names, values)) for values in product(*value_lists)]

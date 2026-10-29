@@ -13,7 +13,7 @@ from Constants import data_n_events_of
 from Metrics_ndim import cap_data_n_events, data_sized_target, data_subsample_indices
 from Plots_ndim import labels_of, plot_histograms, plot_training_history, plot_triangles
 from Sample_io import load_sample, load_samples, sample_params
-from Train_predict import load_model, predict_model
+from Train_predict import load_model, model_params_of, predict_model
 import argparse
 import json
 
@@ -54,20 +54,25 @@ if __name__ == "__main__":
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    models = {model: load_model(model, os.path.join(args.model_dir, model, model)) for model in args.model_list}
+    model_paths = {model: os.path.join(args.model_dir, model, model) for model in args.model_list}
+    models = {model: load_model(model, path) for model, path in model_paths.items()}
 
-    # The models were trained on the reweighting parameters only, so their weights are predicted from
-    # that subset of the samples, whichever parameters the plots below are made on: every parameter set
-    # shares the same events, so the weights apply unchanged regardless of which columns are read.
-    reweight_samples = load_samples(args.sample_dir, topology=args.topology, params=args.reweight_params,
-                                    sample_names=("original_test",))
+    # Every model was trained on the reweighting parameters, or on the subset of them a per-model
+    # reweighting override left it, so its weights are predicted from those columns of the samples,
+    # whichever parameters the plots below are made on: every parameter set shares the same events, so
+    # the weights apply unchanged regardless of which columns are read.
+    model_params = {model: model_params_of(model, path, default=args.reweight_params)
+                    for model, path in model_paths.items()}
+    predicted_samples = {tuple(params): load_samples(args.sample_dir, topology=args.topology, params=params,
+                                                     sample_names=("original_test",))["original_test"]
+                         for params in model_params.values()}
 
     def weights_of(original_weight):
         """Absolute weights of the events of a sample, for every method and for the original distribution.
 
         The trained weights take the pre-weighted original distribution to the pre-weighted target one,
         so they are multiplied by the pre-weights of the events."""
-        weights_dict = {model: predict_model(model, trained_model, reweight_samples["original_test"])*original_weight
+        weights_dict = {model: predict_model(model, trained_model, predicted_samples[tuple(model_params[model])])*original_weight
                         for model, trained_model in models.items()}
         weights_dict['Original'] = original_weight
         return weights_dict
