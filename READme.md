@@ -85,7 +85,7 @@ In the `data_scale` section, you can specify
 - `n_subsamples`: the number of data-sized subsamples the data-scale SWD and p-value of every run are taken over
 
 The data scale of a sample is the number of raw events the real downstream analysis will use (`DATA_N_EVENTS` in
-`Constants.py`, `DEFAULT_DATA_N_EVENTS` otherwise), split across topologies by the summed PreWeight of their target events.
+`Constants.py`, looked up by the flavour of the sample, `DEFAULT_DATA_N_EVENTS` otherwise), split across topologies by the summed PreWeight of their target events.
 
 In the `output` section, you can specify
 - `tag`: a string used by Snakemake to identify all saved outputs from this run

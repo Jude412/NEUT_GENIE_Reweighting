@@ -11,7 +11,7 @@ import re
 
 import pyarrow.parquet as pq
 
-from Constants import DATA_N_EVENTS, DEFAULT_DATA_N_EVENTS, TOPOLOGY_CODES, TOPOLOGY_COLUMN, data_n_events_of
+from Constants import TOPOLOGY_CODES, TOPOLOGY_COLUMN, data_n_events_of, sample_data_n_events
 from List_hyperparameters import grids_of_file, labelled_grid_of, labels_of
 from Param_sets import ALL_PARAMS_SET, REWEIGHTING_SET
 from Train_predict import MODEL_NAMES, model_extension
@@ -85,12 +85,12 @@ N_SUBSAMPLES = config["data_scale"]["n_subsamples"]
 
 def data_n_events_for(wildcards):
     """Return the total number of raw events the real downstream analysis will use for a sample."""
-    return DATA_N_EVENTS.get(wildcards.sample, DEFAULT_DATA_N_EVENTS)
+    return sample_data_n_events(wildcards.sample)
 
 def topology_data_n_events(sample, topology):
     """Return the number of events the real downstream analysis will use for one topology of a
     sample: the sample's data size split across its topologies by their target rates."""
-    return data_n_events_of(DATA_N_EVENTS.get(sample, DEFAULT_DATA_N_EVENTS),
+    return data_n_events_of(sample_data_n_events(sample),
                             TARGET_TOPOLOGY_RATES_FILE.format(sample=sample), topology)
 
 def max_training_events(sample, topology):
